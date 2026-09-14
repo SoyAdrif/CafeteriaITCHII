@@ -1,1 +1,4 @@
-VisualStudio
+bin/
+obj/
+.vs/
+*.user
