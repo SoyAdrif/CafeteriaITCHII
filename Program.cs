@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using CafeteriaInventario.Modelos;
 using CafeteriaInventario.Servicios;
 
 namespace CafeteriaInventario
@@ -7,18 +9,29 @@ namespace CafeteriaInventario
     {
         static void Main(string[] args)
         {
-            InventarioServicio servicio = new InventarioServicio();
+            InventarioServicio inventarioBD = new InventarioServicio();
+
+            // Insumos y recetas para productos preparados (POO: Composición y Clases Abstractas)
+            Ingrediente cafeGrano = new Ingrediente("Grano de Cafe (g)", 1000);
+            Ingrediente leche = new Ingrediente("Leche (ml)", 2000);
+
+            ProductoElaborado cappuccino = new ProductoElaborado(99, "CAF-CAP", "Cappuccino Preparado", 50.00m, 16.00m);
+            cappuccino.AgregarInsumoAReceta(cafeGrano, 18); // 18g de café
+            cappuccino.AgregarInsumoAReceta(leche, 150);    // 150ml de leche
+
             bool salir = false;
 
             do
             {
                 Console.WriteLine("\n=================================");
-                Console.WriteLine("     CAFETERIA - CONTROL STOCK   ");
+                Console.WriteLine("    CAFETERIA - CONTROL TOTAL    ");
                 Console.WriteLine("=================================");
-                Console.WriteLine("1. Ver lista de productos y existencias");
-                Console.WriteLine("2. Registrar una venta");
-                Console.WriteLine("3. Reabastecer producto (Entrada)");
-                Console.WriteLine("4. Salir");
+                Console.WriteLine("1. Ver inventario general (SQLite)");
+                Console.WriteLine("2. Registrar venta de mostrador (SQLite)");
+                Console.WriteLine("3. Reabastecer stock (SQLite)");
+                Console.WriteLine("4. Vender Cappuccino elaborado (Receta / Insumos)");
+                Console.WriteLine("5. Ver existencias de insumos de barra");
+                Console.WriteLine("6. Salir");
                 Console.Write("Seleccione una opcion: ");
 
                 string opcion = Console.ReadLine();
@@ -26,20 +39,20 @@ namespace CafeteriaInventario
                 switch (opcion)
                 {
                     case "1":
-                        servicio.ListarProductos();
+                        inventarioBD.ListarProductos();
                         break;
 
                     case "2":
                         Console.Write("Ingrese el SKU del producto: ");
-                        string skuVenta = Console.ReadLine();
-                        Console.Write("Ingrese la cantidad vendida: ");
+                        string sku = Console.ReadLine();
+                        Console.Write("Ingrese la cantidad a vender: ");
                         if (decimal.TryParse(Console.ReadLine(), out decimal cantVenta))
                         {
-                            servicio.RegistrarVenta(skuVenta, cantVenta);
+                            inventarioBD.RegistrarVenta(sku, cantVenta);
                         }
                         else
                         {
-                            Console.WriteLine("Cantidad no valida.");
+                            Console.WriteLine("Cantidad invalida.");
                         }
                         break;
 
@@ -49,15 +62,36 @@ namespace CafeteriaInventario
                         Console.Write("Ingrese la cantidad a ingresar: ");
                         if (decimal.TryParse(Console.ReadLine(), out decimal cantEntrada))
                         {
-                            servicio.ReabastecerStock(skuEntrada, cantEntrada);
+                            inventarioBD.ReabastecerStock(skuEntrada, cantEntrada);
                         }
                         else
                         {
-                            Console.WriteLine("Cantidad no valida.");
+                            Console.WriteLine("Cantidad invalida.");
                         }
                         break;
 
                     case "4":
+                        Console.Write("¿Cuantas tazas de Cappuccino desea preparar?: ");
+                        if (decimal.TryParse(Console.ReadLine(), out decimal tazas))
+                        {
+                            if (cappuccino.DescontarExistencias(tazas))
+                            {
+                                Console.WriteLine($"Venta completada: {tazas} Cappuccino(s) preparados. Total: ${(cappuccino.Precio * tazas):F2}");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("Numero de tazas invalido.");
+                        }
+                        break;
+
+                    case "5":
+                        Console.WriteLine("\n--- INSUMOS EN BARRA ---");
+                        Console.WriteLine($"- {cafeGrano.Nombre}: {cafeGrano.StockGramosOMl} g restantes");
+                        Console.WriteLine($"- {leche.Nombre}: {leche.StockGramosOMl} ml restantes");
+                        break;
+
+                    case "6":
                         Console.WriteLine("Cerrando sistema...");
                         salir = true;
                         break;
