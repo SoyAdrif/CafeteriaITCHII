@@ -31,7 +31,17 @@ namespace CafeteriaInventario.Servicios
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         producto_id INTEGER NOT NULL UNIQUE,
                         cantidad_disponible DECIMAL NOT NULL,
+                        stock_minimo DECIMAL DEFAULT 5.0,
                         FOREIGN KEY (producto_id) REFERENCES productos(id)
+                    );
+
+                    CREATE TABLE IF NOT EXISTS movimientos (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        producto_sku TEXT NOT NULL,
+                        tipo TEXT NOT NULL,
+                        cantidad DECIMAL NOT NULL,
+                        motivo TEXT NOT NULL,
+                        fecha TEXT NOT NULL
                     );
                 ";
 
@@ -40,7 +50,6 @@ namespace CafeteriaInventario.Servicios
                     comando.ExecuteNonQuery();
                 }
 
-                // Cargar datos base si la tabla está vacía
                 InsertarDatosIniciales(conexion);
             }
         }
@@ -59,10 +68,10 @@ namespace CafeteriaInventario.Servicios
                         ('PAN-001', 'Croissant de Mantequilla', 45.00, 18.00),
                         ('BEB-001', 'Te Verde', 30.00, 8.00);
 
-                        INSERT INTO inventario (producto_id, cantidad_disponible) VALUES 
-                        (1, 20),
-                        (2, 15),
-                        (3, 10);
+                        INSERT INTO inventario (producto_id, cantidad_disponible, stock_minimo) VALUES 
+                        (1, 20, 5),
+                        (2, 4, 5),
+                        (3, 10, 3);
                     ";
                     using (var insertCmd = new SqliteCommand(insertQuery, conexion))
                     {

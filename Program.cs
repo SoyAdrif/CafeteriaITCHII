@@ -31,7 +31,8 @@ namespace CafeteriaInventario
                 Console.WriteLine("3. Reabastecer stock (SQLite)");
                 Console.WriteLine("4. Vender Cappuccino elaborado (Receta / Insumos)");
                 Console.WriteLine("5. Ver existencias de insumos de barra");
-                Console.WriteLine("6. Salir");
+                Console.WriteLine("6. Ver historial de movimientos");
+                Console.WriteLine("7. Salir");
                 Console.Write("Seleccione una opcion: ");
 
                 string opcion = Console.ReadLine();
@@ -91,10 +92,15 @@ namespace CafeteriaInventario
                         Console.WriteLine($"- {leche.Nombre}: {leche.StockGramosOMl} ml restantes");
                         break;
 
+
                     case "6":
+                        inventarioBD.VerHistorialMovimientos();
+                        break;
+
+                    case "7":
                         Console.WriteLine("Cerrando sistema...");
                         salir = true;
-                        break;
+                        break;    
 
                     default:
                         Console.WriteLine("Opcion no valida. Intente de nuevo.");

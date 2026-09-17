@@ -14,14 +14,14 @@ namespace CafeteriaInventario.Servicios
 
         public void ListarProductos()
         {
-            Console.WriteLine("\n--- INVENTARIO ACTUAL (Base de Datos Local: SQLite) ---");
-            Console.WriteLine("{0,-8} {1,-25} {2,-10} {3,-10}", "SKU", "Nombre", "Precio", "Stock");
-            Console.WriteLine(new string('-', 55));
+            Console.WriteLine("\n--- INVENTARIO ACTUAL ---");
+            Console.WriteLine("{0,-8} {1,-25} {2,-10} {3,-10} {4,-10}", "SKU", "Nombre", "Precio", "Stock", "Alerta");
+            Console.WriteLine(new string('-', 68));
 
             using (var con = _bd.ObtenerConexion())
             {
                 string query = @"
-                    SELECT p.sku, p.nombre, p.precio_base, i.cantidad_disponible 
+                    SELECT p.sku, p.nombre, p.precio_base, i.cantidad_disponible, i.stock_minimo 
                     FROM productos p
                     INNER JOIN inventario i ON p.id = i.producto_id;
                 ";
@@ -35,8 +35,10 @@ namespace CafeteriaInventario.Servicios
                         string nombre = reader.GetString(1);
                         decimal precio = reader.GetDecimal(2);
                         decimal stock = reader.GetDecimal(3);
+                        decimal minimo = reader.GetDecimal(4);
+                        string alerta = stock <= minimo ? "[BAJO STOCK]" : "OK";
 
-                        Console.WriteLine("{0,-8} {1,-25} ${2,-9:F2} {3,-10}", sku, nombre, precio, stock);
+                        Console.WriteLine("{0,-8} {1,-25} ${2,-9:F2} {3,-10} {4,-10}", sku, nombre, precio, stock, alerta);
                     }
                 }
             }
@@ -81,6 +83,7 @@ namespace CafeteriaInventario.Servicios
                     return false;
                 }
 
+                // Descontar stock
                 string updateQuery = "UPDATE inventario SET cantidad_disponible = cantidad_disponible - @cant WHERE producto_id = @id;";
                 using (var updateCmd = new SqliteCommand(updateQuery, con))
                 {
@@ -88,6 +91,9 @@ namespace CafeteriaInventario.Servicios
                     updateCmd.Parameters.AddWithValue("@id", prodId);
                     updateCmd.ExecuteNonQuery();
                 }
+
+                // Registrar auditoría en tabla movimientos
+                RegistrarMovimiento(con, sku, "Venta", cantidad, "Venta en caja");
 
                 Console.WriteLine($"Venta registrada: {cantidad}x {nombre}. Total: ${(precio * cantidad):F2}");
                 return true;
@@ -112,7 +118,8 @@ namespace CafeteriaInventario.Servicios
 
                     if (filas > 0)
                     {
-                        Console.WriteLine("Stock actualizado exitosamente en la base de datos local.");
+                        RegistrarMovimiento(con, sku, "Entrada", cantidad, "Reabastecimiento de proveedor");
+                        Console.WriteLine("Stock actualizado exitosamente.");
                         return true;
                     }
                 }
@@ -120,6 +127,48 @@ namespace CafeteriaInventario.Servicios
 
             Console.WriteLine("Error: Producto no encontrado.");
             return false;
+        }
+
+        private void RegistrarMovimiento(SqliteConnection con, string sku, string tipo, decimal cantidad, string motivo)
+        {
+            string query = @"
+                INSERT INTO movimientos (producto_sku, tipo, cantidad, motivo, fecha) 
+                VALUES (@sku, @tipo, @cantidad, @motivo, @fecha);
+            ";
+            using (var cmd = new SqliteCommand(query, con))
+            {
+                cmd.Parameters.AddWithValue("@sku", sku);
+                cmd.Parameters.AddWithValue("@tipo", tipo);
+                cmd.Parameters.AddWithValue("@cantidad", cantidad);
+                cmd.Parameters.AddWithValue("@motivo", motivo);
+                cmd.Parameters.AddWithValue("@fecha", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        public void VerHistorialMovimientos()
+        {
+            Console.WriteLine("\n--- BITACORA DE MOVIMIENTOS ---");
+            Console.WriteLine("{0,-20} {1,-10} {2,-10} {3,-10} {4,-25}", "Fecha", "SKU", "Tipo", "Cantidad", "Motivo");
+            Console.WriteLine(new string('-', 78));
+
+            using (var con = _bd.ObtenerConexion())
+            {
+                string query = "SELECT fecha, producto_sku, tipo, cantidad, motivo FROM movimientos ORDER BY id DESC LIMIT 10;";
+                using (var cmd = new SqliteCommand(query, con))
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        Console.WriteLine("{0,-20} {1,-10} {2,-10} {3,-10} {4,-25}",
+                            reader.GetString(0),
+                            reader.GetString(1),
+                            reader.GetString(2),
+                            reader.GetDecimal(3),
+                            reader.GetString(4));
+                    }
+                }
+            }
         }
     }
 }
