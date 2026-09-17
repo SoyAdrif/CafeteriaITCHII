@@ -1,0 +1,15 @@
+/workspaces/CafeteriaITCHII/CafeteriaInventario/CafeteriaInventario/bin/Debug/net10.0/CafeteriaInventario
+/workspaces/CafeteriaITCHII/CafeteriaInventario/CafeteriaInventario/bin/Debug/net10.0/CafeteriaInventario.deps.json
+/workspaces/CafeteriaITCHII/CafeteriaInventario/CafeteriaInventario/bin/Debug/net10.0/CafeteriaInventario.runtimeconfig.json
+/workspaces/CafeteriaITCHII/CafeteriaInventario/CafeteriaInventario/bin/Debug/net10.0/CafeteriaInventario.dll
+/workspaces/CafeteriaITCHII/CafeteriaInventario/CafeteriaInventario/bin/Debug/net10.0/CafeteriaInventario.pdb
+/workspaces/CafeteriaITCHII/CafeteriaInventario/CafeteriaInventario/obj/Debug/net10.0/CafeteriaInventario.GeneratedMSBuildEditorConfig.editorconfig
+/workspaces/CafeteriaITCHII/CafeteriaInventario/CafeteriaInventario/obj/Debug/net10.0/CafeteriaInventario.AssemblyInfoInputs.cache
+/workspaces/CafeteriaITCHII/CafeteriaInventario/CafeteriaInventario/obj/Debug/net10.0/CafeteriaInventario.AssemblyInfo.cs
+/workspaces/CafeteriaITCHII/CafeteriaInventario/CafeteriaInventario/obj/Debug/net10.0/CafeteriaInventario.csproj.CoreCompileInputs.cache
+/workspaces/CafeteriaITCHII/CafeteriaInventario/CafeteriaInventario/obj/Debug/net10.0/CafeteriaInventario.sourcelink.json
+/workspaces/CafeteriaITCHII/CafeteriaInventario/CafeteriaInventario/obj/Debug/net10.0/CafeteriaInventario.dll
+/workspaces/CafeteriaITCHII/CafeteriaInventario/CafeteriaInventario/obj/Debug/net10.0/refint/CafeteriaInventario.dll
+/workspaces/CafeteriaITCHII/CafeteriaInventario/CafeteriaInventario/obj/Debug/net10.0/CafeteriaInventario.pdb
+/workspaces/CafeteriaITCHII/CafeteriaInventario/CafeteriaInventario/obj/Debug/net10.0/CafeteriaInventario.genruntimeconfig.cache
+/workspaces/CafeteriaITCHII/CafeteriaInventario/CafeteriaInventario/obj/Debug/net10.0/ref/CafeteriaInventario.dll
