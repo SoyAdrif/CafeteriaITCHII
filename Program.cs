@@ -31,11 +31,11 @@ namespace CafeteriaInventario
                 Console.WriteLine("4. Vender Cappuccino elaborado (Receta)");
                 Console.WriteLine("5. Ver existencias de insumos de barra");
                 Console.WriteLine("6. Ver bitacora de movimientos (SQLite)");
-                Console.WriteLine("7. Realizar corte de caja / finanzas");
+                Console.WriteLine("7. Realizar corte de caja y cierre de turno");
                 Console.WriteLine("8. Salir");
                 Console.Write("Seleccione una opcion: ");
 
-                string opcion = Console.ReadLine();
+                string opcion = Console.ReadLine() ?? "";
 
                 switch (opcion)
                 {
@@ -45,7 +45,7 @@ namespace CafeteriaInventario
 
                     case "2":
                         Console.Write("Ingrese el SKU del producto: ");
-                        string sku = Console.ReadLine();
+                        string sku = Console.ReadLine() ?? "";
                         Console.Write("Ingrese la cantidad a vender: ");
                         if (decimal.TryParse(Console.ReadLine(), out decimal cantVenta))
                         {
@@ -59,7 +59,7 @@ namespace CafeteriaInventario
 
                     case "3":
                         Console.Write("Ingrese el SKU del producto: ");
-                        string skuEntrada = Console.ReadLine();
+                        string skuEntrada = Console.ReadLine() ?? "";
                         Console.Write("Ingrese la cantidad a ingresar: ");
                         if (decimal.TryParse(Console.ReadLine(), out decimal cantEntrada))
                         {
@@ -99,7 +99,7 @@ namespace CafeteriaInventario
                     case "7":
                         var corte = cajaBD.GenerarCorteTurno();
                         Console.WriteLine("\n=================================");
-                        Console.WriteLine("        CORTE DE CAJA ACTUAL     ");
+                        Console.WriteLine("        CORTE DE TURNO ACTUAL    ");
                         Console.WriteLine("=================================");
                         Console.WriteLine($"Fecha: {corte.FechaGeneracion:yyyy-MM-dd HH:mm:ss}");
                         Console.WriteLine($"Total de Ventas:      {corte.TotalTransaccionesVenta}");
@@ -107,6 +107,14 @@ namespace CafeteriaInventario
                         Console.WriteLine($"Ingresos Brutos:     ${corte.TotalIngresos:F2}");
                         Console.WriteLine($"Utilidad Estimada:   ${corte.TotalGananciaEstimada:F2}");
                         Console.WriteLine("=================================");
+
+                        Console.Write("¿Desea cerrar el turno actual y reiniciar el contador a 0? (s/n): ");
+                        string respuesta = Console.ReadLine() ?? "";
+                        if (respuesta?.Trim().ToLower() == "s")
+                        {
+                            cajaBD.CerrarTurnoCaja();
+                            Console.WriteLine("-> Turno cerrado exitosamente. El contador de caja ahora esta en 0.");
+                        }
                         break;
 
                     case "8":

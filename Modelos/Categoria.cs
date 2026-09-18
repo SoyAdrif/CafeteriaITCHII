@@ -6,7 +6,7 @@ namespace CafeteriaInventario.Modelos
         public long? CategoriaPadreId { get; set; }
         public string Nombre { get; set; }
         public string Slug { get; set; }
-        public string Descripcion { get; set; }
+        public string? Descripcion { get; set; }
         public bool Activo { get; set; } = true;
 
         public Categoria(long id, string nombre, string slug)

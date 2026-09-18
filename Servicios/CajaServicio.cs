@@ -13,14 +13,13 @@ namespace CafeteriaInventario.Servicios
             _bd = new BaseDatosServicio();
         }
 
-        // Retorna el objeto con datos puros, sin interacción por consola
+        // Consulta únicamente las ventas del turno abierto actual
         public ReporteCorteCaja GenerarCorteTurno()
         {
             var reporte = new ReporteCorteCaja();
 
             using (var con = _bd.ObtenerConexion())
             {
-                // Consulta para sumar ventas cruzando movimientos con los precios y costos de productos
                 string query = @"
                     SELECT 
                         COUNT(m.id) AS total_ventas,
@@ -29,7 +28,7 @@ namespace CafeteriaInventario.Servicios
                         COALESCE(SUM(m.cantidad * (p.precio_base - p.costo_precio)), 0) AS ganancia_total
                     FROM movimientos m
                     INNER JOIN productos p ON m.producto_sku = p.sku
-                    WHERE m.tipo = 'Venta';
+                    WHERE m.tipo = 'Venta' AND m.estado = 'Abierto';
                 ";
 
                 using (var cmd = new SqliteCommand(query, con))
@@ -46,6 +45,20 @@ namespace CafeteriaInventario.Servicios
             }
 
             return reporte;
+        }
+
+        // Cierra el turno actual: no borra datos, pero resetea el contador del nuevo turno a 0
+        public bool CerrarTurnoCaja()
+        {
+            using (var con = _bd.ObtenerConexion())
+            {
+                string query = "UPDATE movimientos SET estado = 'Cerrado' WHERE estado = 'Abierto';";
+                using (var cmd = new SqliteCommand(query, con))
+                {
+                    int filasAfectadas = cmd.ExecuteNonQuery();
+                    return filasAfectadas >= 0;
+                }
+            }
         }
     }
 }

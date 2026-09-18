@@ -41,8 +41,9 @@ namespace CafeteriaInventario.Servicios
                         tipo TEXT NOT NULL,
                         cantidad DECIMAL NOT NULL,
                         motivo TEXT NOT NULL,
-                        fecha TEXT NOT NULL
-                    );
+                        fecha TEXT NOT NULL,
+                        estado TEXT NOT NULL DEFAULT 'Abierto'
+);
                 ";
 
                 using (var comando = new SqliteCommand(query, conexion))
@@ -59,7 +60,7 @@ namespace CafeteriaInventario.Servicios
             string checkQuery = "SELECT COUNT(*) FROM productos;";
             using (var checkCmd = new SqliteCommand(checkQuery, conexion))
             {
-                long count = (long)checkCmd.ExecuteScalar();
+                long count = Convert.ToInt64(checkCmd.ExecuteScalar() ?? 0);
                 if (count == 0)
                 {
                     string insertQuery = @"
