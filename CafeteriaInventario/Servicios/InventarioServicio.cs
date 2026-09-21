@@ -350,5 +350,159 @@ namespace CafeteriaInventario.Servicios
             }
         }    
     }
+// Alta dinámica de producto directo de venta
+        public bool RegistrarNuevoProducto(string sku, string nombre, decimal precio, decimal costo, decimal stockInicial, decimal stockMinimo)
+        {
+            using (var con = _bd.ObtenerConexion())
+            {
+                // Validar si el SKU ya existe
+                string checkQuery = "SELECT COUNT(*) FROM productos WHERE sku = @sku;";
+                using (var checkCmd = new SqliteCommand(checkQuery, con))
+                {
+                    checkCmd.Parameters.AddWithValue("@sku", sku.Trim());
+                    long existe = Convert.ToInt64(checkCmd.ExecuteScalar() ?? 0);
+                    if (existe > 0)
+                    {
+                        Console.WriteLine($"-> Error: El SKU '{sku}' ya se encuentra registrado.");
+                        return false;
+                    }
+                }
+
+                using (var tx = con.BeginTransaction())
+                {
+                    try
+                    {
+                        string queryInsert = @"
+                            INSERT INTO productos (sku, nombre, precio_base, costo_precio, stock_actual, stock_minimo)
+                            VALUES (@sku, @nombre, @precio, @costo, @stock, @minimo);
+                        ";
+
+                        using (var cmd = new SqliteCommand(queryInsert, con, tx))
+                        {
+                            cmd.Parameters.AddWithValue("@sku", sku.Trim());
+                            cmd.Parameters.AddWithValue("@nombre", nombre.Trim());
+                            cmd.Parameters.AddWithValue("@precio", precio);
+                            cmd.Parameters.AddWithValue("@costo", costo);
+                            cmd.Parameters.AddWithValue("@stock", stockInicial);
+                            cmd.Parameters.AddWithValue("@minimo", stockMinimo);
+                            cmd.ExecuteNonQuery();
+                        }
+
+                        if (stockInicial > 0)
+                        {
+                            string movInsert = @"
+                                INSERT INTO movimientos (producto_sku, tipo, cantidad, motivo, fecha, estado)
+                                VALUES (@sku, 'Entrada', @stock, 'Inventario inicial de registro', datetime('now'), 'Abierto');
+                            ";
+                            using (var movCmd = new SqliteCommand(movInsert, con, tx))
+                            {
+                                movCmd.Parameters.AddWithValue("@sku", sku.Trim());
+                                movCmd.Parameters.AddWithValue("@stock", stockInicial);
+                                movCmd.ExecuteNonQuery();
+                            }
+                        }
+
+                        tx.Commit();
+                        Console.WriteLine($"-> Producto '{nombre}' registrado exitosamente con alerta en stock <= {stockMinimo}.");
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        tx.Rollback();
+                        Console.WriteLine("-> Error al guardar producto: " + ex.Message);
+                        return false;
+                    }
+                }
+            }
+        }
+
+        // Alta dinámica de insumos para recetas de barra
+        public bool RegistrarNuevoInsumo(string nombre, string unidadMedida, decimal stockInicial, decimal stockMinimo)
+        {
+            using (var con = _bd.ObtenerConexion())
+            {
+                string queryInsert = @"
+                    INSERT INTO insumos (nombre, unidad_medida, stock_actual, stock_minimo)
+                    VALUES (@nombre, @unidad, @stock, @minimo);
+                ";
+
+                using (var cmd = new SqliteCommand(queryInsert, con))
+                {
+                    cmd.Parameters.AddWithValue("@nombre", nombre.Trim());
+                    cmd.Parameters.AddWithValue("@unidad", unidadMedida.Trim());
+                    cmd.Parameters.AddWithValue("@stock", stockInicial);
+                    cmd.Parameters.AddWithValue("@minimo", stockMinimo);
+                    cmd.ExecuteNonQuery();
+                }
+
+                Console.WriteLine($"-> Insumo '{nombre}' ({unidadMedida}) registrado con exito.");
+                return true;
+            }
+        }
+// Eliminación de producto con validación de dependencias
+        public bool EliminarProducto(string sku)
+        {
+            using (var con = _bd.ObtenerConexion())
+            {
+                // 1. Verificar si el producto existe
+                string checkQuery = "SELECT nombre FROM productos WHERE sku = @sku;";
+                string nombre = "";
+
+                using (var checkCmd = new SqliteCommand(checkQuery, con))
+                {
+                    checkCmd.Parameters.AddWithValue("@sku", sku.Trim());
+                    var result = checkCmd.ExecuteScalar();
+                    if (result == null)
+                    {
+                        Console.WriteLine("-> Error: El producto no existe.");
+                        return false;
+                    }
+                    nombre = result.ToString() ?? "";
+                }
+
+                using (var tx = con.BeginTransaction())
+                {
+                    try
+                    {
+                        // 2. Si está en alguna receta como producto elaborado, limpiar su receta
+                        string delRecetas = "DELETE FROM recetas WHERE producto_sku = @sku;";
+                        using (var cmdRecetas = new SqliteCommand(delRecetas, con, tx))
+                        {
+                            cmdRecetas.Parameters.AddWithValue("@sku", sku.Trim());
+                            cmdRecetas.ExecuteNonQuery();
+                        }
+
+                        // 3. Eliminar el producto de la tabla principal
+                        string queryDelete = "DELETE FROM productos WHERE sku = @sku;";
+                        using (var cmdDel = new SqliteCommand(queryDelete, con, tx))
+                        {
+                            cmdDel.Parameters.AddWithValue("@sku", sku.Trim());
+                            cmdDel.ExecuteNonQuery();
+                        }
+
+                        // 4. Registrar en la bitácora la baja administrativa
+                        string movBaja = @"
+                            INSERT INTO movimientos (producto_sku, tipo, cantidad, motivo, fecha, estado)
+                            VALUES (@sku, 'Baja', 0, 'Eliminación manual de catálogo', datetime('now'), 'Abierto');
+                        ";
+                        using (var cmdMov = new SqliteCommand(movBaja, con, tx))
+                        {
+                            cmdMov.Parameters.AddWithValue("@sku", sku.Trim());
+                            cmdMov.ExecuteNonQuery();
+                        }
+
+                        tx.Commit();
+                        Console.WriteLine($"-> Producto '{nombre}' [{sku}] eliminado con éxito.");
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        tx.Rollback();
+                        Console.WriteLine("-> Error al eliminar producto: " + ex.Message);
+                        return false;
+                    }
+                }
+            }
+        }
 }
 }

@@ -21,11 +21,13 @@ namespace CafeteriaInventario
                 Console.WriteLine("1. Ver inventario general (SQLite)");
                 Console.WriteLine("2. Registrar venta de mostrador (Smart Search)");
                 Console.WriteLine("3. Reabastecer stock (Smart Search)");
-                Console.WriteLine("4. Vender Cappuccino elaborado (Receta en SQLite)");
-                Console.WriteLine("5. Ver existencias de insumos de barra (SQLite)");
-                Console.WriteLine("6. Ver bitacora de movimientos (SQLite)");
-                Console.WriteLine("7. Realizar corte de caja y cierre de turno");
-                Console.WriteLine("8. Salir");
+                Console.WriteLine("4. Registrar nuevo producto / insumo");
+                Console.WriteLine("5. Eliminar producto del catalogo (Smart Search)");
+                Console.WriteLine("6. Vender Cappuccino elaborado (Receta en SQLite)");
+                Console.WriteLine("7. Ver existencias de insumos de barra (SQLite)");
+                Console.WriteLine("8. Ver bitacora de movimientos (SQLite)");
+                Console.WriteLine("9. Realizar corte de caja y cierre de turno");
+                Console.WriteLine("10. Salir");
                 Console.Write("Seleccione una opcion: ");
 
                 string opcion = Console.ReadLine() ?? "";
@@ -77,6 +79,77 @@ namespace CafeteriaInventario
                         break;
 
                     case "4":
+                        Console.WriteLine("\n--- REGISTRO DE NUEVO ARTÍCULO ---");
+                        Console.WriteLine("a. Producto de venta directa (embotellado, pan, etc.)");
+                        Console.WriteLine("b. Insumo para barra (grano, jarabe, leche, etc.)");
+                        Console.Write("Elija el tipo (a/b): ");
+                        string subOpcion = (Console.ReadLine() ?? "").Trim().ToLower();
+
+                        if (subOpcion == "a")
+                        {
+                            Console.Write("Ingrese SKU o escanee código de barras (ej. 104 o 7501...): ");
+                            string nuevoSku = Console.ReadLine() ?? "";
+
+                            Console.Write("Nombre del producto: ");
+                            string nuevoNombre = Console.ReadLine() ?? "";
+
+                            Console.Write("Precio de venta ($): ");
+                            decimal.TryParse(Console.ReadLine(), out decimal precio);
+
+                            Console.Write("Costo de adquisición ($): ");
+                            decimal.TryParse(Console.ReadLine(), out decimal costo);
+
+                            Console.Write("Stock inicial en existencias: ");
+                            decimal.TryParse(Console.ReadLine(), out decimal stock);
+
+                            Console.Write("Umbral de bajo stock mínimo para alerta: ");
+                            decimal.TryParse(Console.ReadLine(), out decimal minimo);
+
+                            inventarioBD.RegistrarNuevoProducto(nuevoSku, nuevoNombre, precio, costo, stock, minimo);
+                        }
+                        else if (subOpcion == "b")
+                        {
+                            Console.Write("Nombre del insumo (ej. Jarabe Vainilla): ");
+                            string nombreInsumo = Console.ReadLine() ?? "";
+
+                            Console.Write("Unidad de medida (g, ml, pza): ");
+                            string unidad = Console.ReadLine() ?? "";
+
+                            Console.Write("Stock inicial disponible: ");
+                            decimal.TryParse(Console.ReadLine(), out decimal stockInsumo);
+
+                            Console.Write("Umbral mínimo para alerta: ");
+                            decimal.TryParse(Console.ReadLine(), out decimal minimoInsumo);
+
+                            inventarioBD.RegistrarNuevoInsumo(nombreInsumo, unidad, stockInsumo, minimoInsumo);
+                        }
+                        else
+                        {
+                            Console.WriteLine("Opción no válida.");
+                        }
+                        break;
+
+                    case "5":
+                        Console.Write("Ingrese SKU, clave o nombre del producto a eliminar: ");
+                        string criterioEliminar = Console.ReadLine() ?? "";
+                        ProductoTerminado? prodEliminar = inventarioBD.BuscarProductoUniversal(criterioEliminar);
+
+                        if (prodEliminar != null)
+                        {
+                            Console.Write($"¿Está seguro de eliminar '{prodEliminar.Nombre}' [{prodEliminar.Sku}] del inventario? (s/n): ");
+                            string confirmacion = (Console.ReadLine() ?? "").Trim().ToLower();
+                            if (confirmacion == "s")
+                            {
+                                inventarioBD.EliminarProducto(prodEliminar.Sku);
+                            }
+                            else
+                            {
+                                Console.WriteLine("Operación cancelada.");
+                            }
+                        }
+                        break;
+
+                    case "6":
                         Console.Write("¿Cuantas tazas de Cappuccino desea preparar?: ");
                         if (decimal.TryParse(Console.ReadLine(), out decimal tazas) && tazas > 0)
                         {
@@ -88,15 +161,15 @@ namespace CafeteriaInventario
                         }
                         break;
 
-                    case "5":
+                    case "7":
                         inventarioBD.ListarInsumosBarra();
                         break;
 
-                    case "6":
+                    case "8":
                         inventarioBD.VerHistorialMovimientos();
                         break;
 
-                    case "7":
+                    case "9":
                         var corte = cajaBD.GenerarCorteTurno();
                         Console.WriteLine("\n=================================");
                         Console.WriteLine("        CORTE DE TURNO ACTUAL    ");
@@ -117,7 +190,7 @@ namespace CafeteriaInventario
                         }
                         break;
 
-                    case "8":
+                    case "10":
                         Console.WriteLine("Cerrando sistema...");
                         salir = true;
                         break;
