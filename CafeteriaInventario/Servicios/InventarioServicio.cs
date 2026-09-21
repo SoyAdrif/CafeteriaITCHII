@@ -1,10 +1,13 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.Data.Sqlite;
+using CafeteriaInventario.Modelos; // <--- Agregar esta línea
 
 namespace CafeteriaInventario.Servicios
 {
     public class InventarioServicio
     {
+
         private readonly BaseDatosServicio _bd;
 
         public InventarioServicio()
@@ -281,5 +284,71 @@ namespace CafeteriaInventario.Servicios
                 }
             }
         }
+        // Búsqueda polimórfica: SKU exacto, código numérico o coincidencia parcial de nombre
+        public ProductoTerminado? BuscarProductoUniversal(string criterio)
+        {
+            using (var con = _bd.ObtenerConexion())
+            {
+                string query = @"
+                    SELECT id, sku, nombre, precio_base, costo_precio, stock_actual, stock_minimo 
+                    FROM productos 
+                    WHERE sku = @criterio OR nombre LIKE @nombreLike COLLATE NOCASE;
+                ";
+
+                using (var cmd = new SqliteCommand(query, con))
+                {
+                    cmd.Parameters.AddWithValue("@criterio", criterio.Trim());
+                    cmd.Parameters.AddWithValue("@nombreLike", $"%{criterio.Trim()}%");
+
+                    var coincidencias = new System.Collections.Generic.List<ProductoTerminado>();
+
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                    {
+                        long id = reader.GetInt64(0);
+                        string sku = reader.GetString(1);
+                        string nombre = reader.GetString(2);
+                        decimal precio = reader.GetDecimal(3);
+                        decimal costo = reader.GetDecimal(4);
+                        decimal stock = reader.GetDecimal(5);
+                        decimal minimo = reader.GetDecimal(6);
+
+                        // Se envían los 6 parámetros requeridos por el constructor
+                        var prod = new ProductoTerminado(id, sku, nombre, precio, costo, stock);
+                        prod.Existencias = stock;
+                        prod.StockMinimo = minimo;
+                        coincidencias.Add(prod);
+                    }
+
+                    if (coincidencias.Count == 0)
+                    {
+                        Console.WriteLine("-> No se encontraron productos con ese criterio.");
+                        return null;
+                    }
+
+                    if (coincidencias.Count == 1)
+                    {
+                        return coincidencias[0];
+                    }
+
+                    Console.WriteLine("\nCoincidencias encontradas:");
+                    for (int i = 0; i < coincidencias.Count; i++)
+                    {
+                        Console.WriteLine($"{i + 1}. [{coincidencias[i].Sku}] {coincidencias[i].Nombre} - ${coincidencias[i].Precio:F2} (Stock: {coincidencias[i].Existencias})");
+                    }
+
+                    Console.Write("Seleccione el numero del producto deseado: ");
+                    if (int.TryParse(Console.ReadLine(), out int seleccion) && seleccion >= 1 && seleccion <= coincidencias.Count)
+                    {
+                        return coincidencias[seleccion - 1];
+                    }
+
+                    Console.WriteLine("Seleccion invalida.");
+                    return null;
+                }
+            }
+        }    
     }
+}
 }

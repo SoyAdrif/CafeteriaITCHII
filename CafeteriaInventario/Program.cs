@@ -1,4 +1,5 @@
 ﻿using System;
+using CafeteriaInventario.Modelos;
 using CafeteriaInventario.Servicios;
 
 namespace CafeteriaInventario
@@ -18,8 +19,8 @@ namespace CafeteriaInventario
                 Console.WriteLine("    CAFETERIA - CONTROL TOTAL    ");
                 Console.WriteLine("=================================");
                 Console.WriteLine("1. Ver inventario general (SQLite)");
-                Console.WriteLine("2. Registrar venta de mostrador (SQLite)");
-                Console.WriteLine("3. Reabastecer stock (SQLite)");
+                Console.WriteLine("2. Registrar venta de mostrador (Smart Search)");
+                Console.WriteLine("3. Reabastecer stock (Smart Search)");
                 Console.WriteLine("4. Vender Cappuccino elaborado (Receta en SQLite)");
                 Console.WriteLine("5. Ver existencias de insumos de barra (SQLite)");
                 Console.WriteLine("6. Ver bitacora de movimientos (SQLite)");
@@ -36,36 +37,48 @@ namespace CafeteriaInventario
                         break;
 
                     case "2":
-                        Console.Write("Ingrese el SKU del producto: ");
-                        string sku = Console.ReadLine() ?? "";
-                        Console.Write("Ingrese la cantidad a vender: ");
-                        if (decimal.TryParse(Console.ReadLine(), out decimal cantVenta))
+                        Console.Write("Escanee código de barras, clave rápida o escriba el nombre: ");
+                        string criterioVenta = Console.ReadLine() ?? "";
+                        ProductoTerminado? prodVenta = inventarioBD.BuscarProductoUniversal(criterioVenta);
+
+                        if (prodVenta != null)
                         {
-                            inventarioBD.RegistrarVenta(sku, cantVenta);
-                        }
-                        else
-                        {
-                            Console.WriteLine("Cantidad invalida.");
+                            Console.WriteLine($"-> Seleccionado: [{prodVenta.Sku}] {prodVenta.Nombre} (Stock actual: {prodVenta.Existencias})");
+                            Console.Write("Ingrese la cantidad a vender: ");
+                            if (decimal.TryParse(Console.ReadLine(), out decimal cantVenta) && cantVenta > 0)
+                            {
+                                inventarioBD.RegistrarVenta(prodVenta.Sku, cantVenta);
+                            }
+                            else
+                            {
+                                Console.WriteLine("Cantidad invalida.");
+                            }
                         }
                         break;
 
                     case "3":
-                        Console.Write("Ingrese el SKU del producto: ");
-                        string skuEntrada = Console.ReadLine() ?? "";
-                        Console.Write("Ingrese la cantidad a ingresar: ");
-                        if (decimal.TryParse(Console.ReadLine(), out decimal cantEntrada))
+                        Console.Write("Escanee código de barras, clave rápida o escriba el nombre: ");
+                        string criterioEntrada = Console.ReadLine() ?? "";
+                        ProductoTerminado? prodEntrada = inventarioBD.BuscarProductoUniversal(criterioEntrada);
+
+                        if (prodEntrada != null)
                         {
-                            inventarioBD.ReabastecerStock(skuEntrada, cantEntrada);
-                        }
-                        else
-                        {
-                            Console.WriteLine("Cantidad invalida.");
+                            Console.WriteLine($"-> Seleccionado: [{prodEntrada.Sku}] {prodEntrada.Nombre} (Stock actual: {prodEntrada.Existencias})");
+                            Console.Write("Ingrese la cantidad a ingresar: ");
+                            if (decimal.TryParse(Console.ReadLine(), out decimal cantEntrada) && cantEntrada > 0)
+                            {
+                                inventarioBD.ReabastecerStock(prodEntrada.Sku, cantEntrada);
+                            }
+                            else
+                            {
+                                Console.WriteLine("Cantidad invalida.");
+                            }
                         }
                         break;
 
                     case "4":
                         Console.Write("¿Cuantas tazas de Cappuccino desea preparar?: ");
-                        if (decimal.TryParse(Console.ReadLine(), out decimal tazas))
+                        if (decimal.TryParse(Console.ReadLine(), out decimal tazas) && tazas > 0)
                         {
                             inventarioBD.VenderProductoElaborado("BEB-CAP", tazas);
                         }
