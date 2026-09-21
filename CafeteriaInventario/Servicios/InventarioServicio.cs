@@ -732,6 +732,200 @@ namespace CafeteriaInventario.Servicios
                     }
                 }
             }
-        }        
+        } 
+// Sobrecarga de RegistrarVenta para aplicar porcentaje de descuento (Polimorfismo por Sobrecarga)
+        public bool RegistrarVenta(string sku, decimal cantidad, decimal porcentajeDescuento)
+        {
+            if (porcentajeDescuento < 0 || porcentajeDescuento > 100)
+            {
+                Console.WriteLine("-> Porcentaje de descuento inválido (debe ser entre 0 y 100).");
+                return false;
+            }
+
+            using (var con = _bd.ObtenerConexion())
+            {
+                string queryProd = "SELECT nombre, precio_base, stock_actual FROM productos WHERE sku = @sku;";
+                string nombre = "";
+                decimal precioBase = 0;
+                decimal stock = 0;
+
+                using (var cmd = new SqliteCommand(queryProd, con))
+                {
+                    cmd.Parameters.AddWithValue("@sku", sku.Trim());
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        if (!reader.Read())
+                        {
+                            Console.WriteLine("-> Producto no encontrado.");
+                            return false;
+                        }
+                        nombre = reader.GetString(0);
+                        precioBase = reader.GetDecimal(1);
+                        stock = reader.GetDecimal(2);
+                    }
+                }
+
+                if (stock < cantidad)
+                {
+                    Console.WriteLine($"-> Stock insuficiente para '{nombre}'. Disponible: {stock}.");
+                    return false;
+                }
+
+                decimal factor = 1 - (porcentajeDescuento / 100m);
+                decimal precioFinal = precioBase * factor;
+                decimal subtotal = precioFinal * cantidad;
+
+                using (var tx = con.BeginTransaction())
+                {
+                    try
+                    {
+                        string updateStock = "UPDATE productos SET stock_actual = stock_actual - @cant WHERE sku = @sku;";
+                        using (var cmdUp = new SqliteCommand(updateStock, con, tx))
+                        {
+                            cmdUp.Parameters.AddWithValue("@cant", cantidad);
+                            cmdUp.Parameters.AddWithValue("@sku", sku.Trim());
+                            cmdUp.ExecuteNonQuery();
+                        }
+
+                        string insertMov = @"
+                            INSERT INTO movimientos (producto_sku, tipo, cantidad, motivo, fecha, estado)
+                            VALUES (@sku, 'Salida', @cant, @motivo, datetime('now'), 'Abierto');
+                        ";
+                        using (var cmdMov = new SqliteCommand(insertMov, con, tx))
+                        {
+                            cmdMov.Parameters.AddWithValue("@sku", sku.Trim());
+                            cmdMov.Parameters.AddWithValue("@cant", cantidad);
+                            cmdMov.Parameters.AddWithValue("@motivo", $"Venta con promo ({porcentajeDescuento:F0}% desc.) - Subtotal: ${subtotal:F2}");
+                            cmdMov.ExecuteNonQuery();
+                        }
+
+                        tx.Commit();
+                        Console.WriteLine($"-> Venta procesada con {porcentajeDescuento:F0}% desc: {cantidad}x '{nombre}' | Total cobrado: ${subtotal:F2}");
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        tx.Rollback();
+                        Console.WriteLine("-> Error en transacción: " + ex.Message);
+                        return false;
+                    }
+                }
+            }
+        }
+
+        // Sobrecarga de VenderProductoElaborado para preparaciones con descuento
+        public bool VenderProductoElaborado(string sku, decimal porciones, decimal porcentajeDescuento)
+        {
+            if (porcentajeDescuento < 0 || porcentajeDescuento > 100)
+            {
+                Console.WriteLine("-> Descuento inválido.");
+                return false;
+            }
+
+            using (var con = _bd.ObtenerConexion())
+            {
+                string infoProd = "SELECT nombre, precio_base FROM productos WHERE sku = @sku;";
+                string nombreProd = "";
+                decimal precioBase = 0;
+
+                using (var cmdP = new SqliteCommand(infoProd, con))
+                {
+                    cmdP.Parameters.AddWithValue("@sku", sku.Trim());
+                    using (var reader = cmdP.ExecuteReader())
+                    {
+                        if (!reader.Read()) return false;
+                        nombreProd = reader.GetString(0);
+                        precioBase = reader.GetDecimal(1);
+                    }
+                }
+
+                // Obtener ingredientes y verificar existencias
+                string queryReceta = @"
+                    SELECT r.insumo_id, i.nombre, r.cantidad_requerida, i.stock_actual, i.unidad_medida
+                    FROM recetas r
+                    JOIN insumos i ON r.insumo_id = i.id
+                    WHERE r.producto_sku = @sku;
+                ";
+
+                var lista = new List<(long id, string nombre, decimal dosis, decimal stock, string unidad)>();
+
+                using (var cmdRec = new SqliteCommand(queryReceta, con))
+                {
+                    cmdRec.Parameters.AddWithValue("@sku", sku.Trim());
+                    using (var reader = cmdRec.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            lista.Add((
+                                reader.GetInt64(0),
+                                reader.GetString(1),
+                                reader.GetDecimal(2),
+                                reader.GetDecimal(3),
+                                reader.GetString(4)
+                            ));
+                        }
+                    }
+                }
+
+                if (lista.Count == 0)
+                {
+                    Console.WriteLine("-> Este artículo no cuenta con receta de preparación.");
+                    return false;
+                }
+
+                foreach (var item in lista)
+                {
+                    decimal totalNecesario = item.dosis * porciones;
+                    if (item.stock < totalNecesario)
+                    {
+                        Console.WriteLine($"-> Insumo insuficiente: '{item.nombre}'. Requiere {totalNecesario} {item.unidad}, stock actual: {item.stock} {item.unidad}.");
+                        return false;
+                    }
+                }
+
+                decimal factor = 1 - (porcentajeDescuento / 100m);
+                decimal subtotal = (precioBase * factor) * porciones;
+
+                using (var tx = con.BeginTransaction())
+                {
+                    try
+                    {
+                        foreach (var item in lista)
+                        {
+                            decimal totalNecesario = item.dosis * porciones;
+                            string updateInsumo = "UPDATE insumos SET stock_actual = stock_actual - @cant WHERE id = @id;";
+                            using (var cmdUp = new SqliteCommand(updateInsumo, con, tx))
+                            {
+                                cmdUp.Parameters.AddWithValue("@cant", totalNecesario);
+                                cmdUp.Parameters.AddWithValue("@id", item.id);
+                                cmdUp.ExecuteNonQuery();
+                            }
+                        }
+
+                        string insertMov = @"
+                            INSERT INTO movimientos (producto_sku, tipo, cantidad, motivo, fecha, estado)
+                            VALUES (@sku, 'Salida', @cant, @motivo, datetime('now'), 'Abierto');
+                        ";
+                        using (var cmdMov = new SqliteCommand(insertMov, con, tx))
+                        {
+                            cmdMov.Parameters.AddWithValue("@sku", sku.Trim());
+                            cmdMov.Parameters.AddWithValue("@cant", porciones);
+                            cmdMov.Parameters.AddWithValue("@motivo", $"Preparación elaborada promo ({porcentajeDescuento:F0}% desc.) - Subtotal: ${subtotal:F2}");
+                            cmdMov.ExecuteNonQuery();
+                        }
+
+                        tx.Commit();
+                        Console.WriteLine($"-> Venta elaborada con {porcentajeDescuento:F0}% desc: {porciones}x '{nombreProd}' | Total cobrado: ${subtotal:F2}");
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        tx.Rollback();
+                        Console.WriteLine("-> Error al despachar receta: " + ex.Message);
+                        return false;
+                    }
+                }
+            }
+        }               
      }
 }

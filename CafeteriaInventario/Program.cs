@@ -19,14 +19,15 @@ namespace CafeteriaInventario
                 Console.WriteLine("    CAFETERIA - CONTROL TOTAL    ");
                 Console.WriteLine("=================================");
                 Console.WriteLine("1. Ver inventario general (SQLite)");
-                Console.WriteLine("2. Registrar venta (Smart Search: Directo o Receta)");
-                Console.WriteLine("3. Reabastecer stock (Productos directos o Insumos)");
-                Console.WriteLine("4. Registrar artículos y recetas");
-                Console.WriteLine("5. Eliminar producto del catálogo (Smart Search)");
-                Console.WriteLine("6. Ver existencias de insumos de barra (SQLite)");
-                Console.WriteLine("7. Ver bitácora de movimientos (SQLite)");
-                Console.WriteLine("8. Realizar corte de caja y cierre de turno");
-                Console.WriteLine("9. Salir");
+                Console.WriteLine("2. Registrar venta regular (Smart Search)");
+                Console.WriteLine("3. Registrar venta con PROMOCIÓN / COMBO (Sobrecarga POO)");
+                Console.WriteLine("4. Reabastecer stock (Productos directos o Insumos)");
+                Console.WriteLine("5. Registrar artículos y recetas");
+                Console.WriteLine("6. Eliminar producto del catálogo (Smart Search)");
+                Console.WriteLine("7. Ver existencias de insumos de barra (SQLite)");
+                Console.WriteLine("8. Ver bitácora de movimientos (SQLite)");
+                Console.WriteLine("9. Realizar corte de caja y cierre de turno");
+                Console.WriteLine("10. Salir");
                 Console.Write("Seleccione una opción: ");
 
                 string opcion = Console.ReadLine() ?? "";
@@ -76,6 +77,100 @@ namespace CafeteriaInventario
                         break;
 
                     case "3":
+                        Console.WriteLine("\n--- MODULO DE PROMOCIONES Y COMBOS ---");
+                        Console.WriteLine("a. Descuento porcentual directo a un producto/bebida");
+                        Console.WriteLine("b. Combo Desayuno (Bebida + Pan/Repostería con 15% desc.)");
+                        Console.WriteLine("c. Volver al menú principal");
+                        Console.Write("Seleccione tipo de promoción (a/b/c): ");
+                        string subPromo = (Console.ReadLine() ?? "").Trim().ToLower();
+
+                        if (subPromo == "a")
+                        {
+                            Console.Write("Escanee código de barras o escriba nombre del producto: ");
+                            string crit = Console.ReadLine() ?? "";
+                            ProductoTerminado? prod = inventarioBD.BuscarProductoUniversal(crit);
+
+                            if (prod != null)
+                            {
+                                Console.Write("Ingrese porcentaje de descuento (ej. 10 para 10%, 20 para 20%): ");
+                                if (decimal.TryParse(Console.ReadLine(), out decimal desc) && desc >= 0 && desc <= 100)
+                                {
+                                    Console.Write("Cantidad a despachar: ");
+                                    if (decimal.TryParse(Console.ReadLine(), out decimal cant) && cant > 0)
+                                    {
+                                        if (inventarioBD.TieneReceta(prod.Sku))
+                                        {
+                                            inventarioBD.VenderProductoElaborado(prod.Sku, cant, desc);
+                                        }
+                                        else
+                                        {
+                                            inventarioBD.RegistrarVenta(prod.Sku, cant, desc);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else if (subPromo == "b")
+                        {
+                            Console.WriteLine("\n[CONFIGURANDO COMBO DESAYUNO - 15% DESC]");
+                            Console.Write("1. Seleccione la bebida (código, clave rápida o nombre): ");
+                            string critBeb = Console.ReadLine() ?? "";
+                            ProductoTerminado? beb = inventarioBD.BuscarProductoUniversal(critBeb);
+
+                            if (beb == null)
+                            {
+                                Console.WriteLine("-> No se pudo agregar la bebida. Combo cancelado.");
+                                break;
+                            }
+                            Console.WriteLine($"   Bebida agregada: [{beb.Sku}] {beb.Nombre} (${beb.Precio:F2})");
+
+                            Console.Write("\n2. Seleccione el acompañamiento (código, clave rápida o nombre): ");
+                            string critPan = Console.ReadLine() ?? "";
+                            ProductoTerminado? pan = inventarioBD.BuscarProductoUniversal(critPan);
+
+                            if (pan == null)
+                            {
+                                Console.WriteLine("-> No se pudo agregar el acompañamiento. Combo cancelado.");
+                                break;
+                            }
+                            Console.WriteLine($"   Acompañamiento agregado: [{pan.Sku}] {pan.Nombre} (${pan.Precio:F2})");
+
+                            decimal totalRegular = beb.Precio + pan.Precio;
+                            decimal totalConDesc = totalRegular * 0.85m;
+
+                            Console.WriteLine($"\n-> Combo configurado: [{beb.Nombre}] + [{pan.Nombre}]");
+                            Console.WriteLine($"-> Precio regular: ${totalRegular:F2} | Total con 15% OFF: ${totalConDesc:F2}");
+                            Console.Write("¿Desea confirmar el despacho del combo? (s/n): ");
+                            string confirmar = (Console.ReadLine() ?? "").Trim().ToLower();
+
+                            if (confirmar == "s")
+                            {
+                                // Despacho de bebida
+                                if (inventarioBD.TieneReceta(beb.Sku))
+                                    inventarioBD.VenderProductoElaborado(beb.Sku, 1, 15);
+                                else
+                                    inventarioBD.RegistrarVenta(beb.Sku, 1, 15);
+
+                                // Despacho de alimento/acompañamiento
+                                if (inventarioBD.TieneReceta(pan.Sku))
+                                    inventarioBD.VenderProductoElaborado(pan.Sku, 1, 15);
+                                else
+                                    inventarioBD.RegistrarVenta(pan.Sku, 1, 15);
+
+                                Console.WriteLine("-> Combo despachado e ingresado a caja exitosamente.");
+                            }
+                            else
+                            {
+                                Console.WriteLine("-> Operación cancelada.");
+                            }
+                        }
+                        else if (subPromo == "c")
+                        {
+                            Console.WriteLine("-> Regresando al menú principal...");
+                        }
+                        break;
+
+                    case "4":
                         Console.WriteLine("\n--- REABASTECIMIENTO DE INVENTARIO ---");
                         Console.WriteLine("a. Reabastecer producto directo (Smart Search)");
                         Console.WriteLine("b. Reabastecer materia prima / insumo de barra");
@@ -103,10 +198,6 @@ namespace CafeteriaInventario
                                 {
                                     inventarioBD.ReabastecerStock(prodEntrada.Sku, cantEntrada);
                                 }
-                                else
-                                {
-                                    Console.WriteLine("Cantidad inválida.");
-                                }
                             }
                         }
                         else if (subReab == "b")
@@ -120,36 +211,20 @@ namespace CafeteriaInventario
                                 {
                                     inventarioBD.ReabastecerInsumo(idInsumo, cantInsumo);
                                 }
-                                else
-                                {
-                                    Console.WriteLine("Cantidad inválida.");
-                                }
                             }
-                            else
-                            {
-                                Console.WriteLine("ID inválido.");
-                            }
-                        }
-                        else if (subReab == "c")
-                        {
-                            Console.WriteLine("-> Regresando al menú principal...");
-                        }
-                        else
-                        {
-                            Console.WriteLine("Opción no válida.");
                         }
                         break;
 
-                    case "4":
+                    case "5":
                         Console.WriteLine("\n--- REGISTRO Y CONFIGURACIÓN ---");
                         Console.WriteLine("a. Producto de venta directa (embotellado, pan, etc.)");
                         Console.WriteLine("b. Insumo de barra (leche, café en grano, jarabes, etc.)");
                         Console.WriteLine("c. Registrar producto preparado y armar su receta");
                         Console.WriteLine("d. Volver al menú principal");
                         Console.Write("Elija el tipo (a/b/c/d): ");
-                        string subOpcion = (Console.ReadLine() ?? "").Trim().ToLower();
+                        string subAlta = (Console.ReadLine() ?? "").Trim().ToLower();
 
-                        if (subOpcion == "a")
+                        if (subAlta == "a")
                         {
                             Console.Write("SKU o código de barras: ");
                             string sku = Console.ReadLine() ?? "";
@@ -166,9 +241,9 @@ namespace CafeteriaInventario
 
                             inventarioBD.RegistrarNuevoProducto(sku, nom, pre, cos, stk, min);
                         }
-                        else if (subOpcion == "b")
+                        else if (subAlta == "b")
                         {
-                            Console.Write("Nombre del insumo (ej. Jarabe, Leche): ");
+                            Console.Write("Nombre del insumo: ");
                             string nomInsumo = Console.ReadLine() ?? "";
                             Console.Write("Unidad de medida (g, ml, pza): ");
                             string unidad = Console.ReadLine() ?? "";
@@ -179,79 +254,59 @@ namespace CafeteriaInventario
 
                             inventarioBD.RegistrarNuevoInsumo(nomInsumo, unidad, stkInsumo, minInsumo);
                         }
-                        else if (subOpcion == "c")
+                        else if (subAlta == "c")
                         {
-                            Console.WriteLine("\n[1/2] Datos generales de la bebida o producto preparado");
-                            Console.Write("SKU para este preparado (ej. BEB-CHO o clave rápida 205): ");
+                            Console.Write("SKU para preparado: ");
                             string skuRec = (Console.ReadLine() ?? "").Trim();
-                            Console.Write("Nombre (ej. Leche con Chocolate): ");
+                            Console.Write("Nombre: ");
                             string nomRec = Console.ReadLine() ?? "";
-                            Console.Write("Precio de venta al cliente ($): ");
+                            Console.Write("Precio ($): ");
                             decimal.TryParse(Console.ReadLine(), out decimal precioRec);
-                            Console.Write("Costo estimado de ingredientes ($): ");
+                            Console.Write("Costo estimado ($): ");
                             decimal.TryParse(Console.ReadLine(), out decimal costoRec);
 
                             if (inventarioBD.RegistrarProductoElaborado(skuRec, nomRec, precioRec, costoRec))
                             {
-                                Console.WriteLine("\n[2/2] Insumos requeridos para 1 porción");
                                 inventarioBD.ListarInsumosConId();
-
                                 bool mas = true;
                                 while (mas)
                                 {
-                                    Console.Write("\nIngrese el ID del insumo a incluir: ");
+                                    Console.Write("\nID de insumo: ");
                                     if (long.TryParse(Console.ReadLine(), out long idIns))
                                     {
-                                        Console.Write("Cantidad requerida por porción (ej. 250 para ml o 25 para g): ");
+                                        Console.Write("Cantidad requerida por porción: ");
                                         if (decimal.TryParse(Console.ReadLine(), out decimal cantReq) && cantReq > 0)
                                         {
                                             inventarioBD.AgregarIngredienteAReceta(skuRec, idIns, cantReq);
                                         }
-                                        else
-                                        {
-                                            Console.WriteLine("Cantidad inválida.");
-                                        }
                                     }
-
-                                    Console.Write("¿Desea agregar otro ingrediente a esta preparación? (s/n): ");
+                                    Console.Write("¿Agregar otro ingrediente? (s/n): ");
                                     if ((Console.ReadLine() ?? "").Trim().ToLower() != "s") mas = false;
                                 }
-                                Console.WriteLine($"-> Receta para '{nomRec}' guardada y lista para vender en mostrador.");
-                            }
-                        }
-                        else if (subOpcion == "d")
-                        {
-                            Console.WriteLine("-> Regresando al menú principal...");
-                        }
-                        else
-                        {
-                            Console.WriteLine("Opción no válida.");
-                        }
-                        break;
-
-                    case "5":
-                        Console.Write("Ingrese SKU o nombre del producto a eliminar: ");
-                        string critElim = Console.ReadLine() ?? "";
-                        ProductoTerminado? pElim = inventarioBD.BuscarProductoUniversal(critElim);
-                        if (pElim != null)
-                        {
-                            Console.Write($"¿Confirmar eliminación de '{pElim.Nombre}' [{pElim.Sku}]? (s/n): ");
-                            if ((Console.ReadLine() ?? "").Trim().ToLower() == "s")
-                            {
-                                inventarioBD.EliminarProducto(pElim.Sku);
                             }
                         }
                         break;
 
                     case "6":
-                        inventarioBD.ListarInsumosBarra();
+                        Console.Write("Ingrese SKU o nombre a eliminar: ");
+                        ProductoTerminado? pElim = inventarioBD.BuscarProductoUniversal(Console.ReadLine() ?? "");
+                        if (pElim != null)
+                        {
+                            Console.Write($"¿Confirmar eliminación de '{pElim.Nombre}' [{pElim.Sku}]? (s/n): ");
+                            if ((Console.ReadLine() ?? "").Trim().ToLower() == "s")
+                                inventarioBD.EliminarProducto(pElim.Sku);
+                        }
                         break;
 
                     case "7":
-                        inventarioBD.VerHistorialMovimientos();
+                        inventarioBD.ListarInsumosBarra();
                         break;
 
                     case "8":
+                        inventarioBD.VerHistorialMovimientos();
+                        break;
+
+                    case "9":
                         var corte = cajaBD.GenerarCorteTurno();
                         Console.WriteLine("\n=================================");
                         Console.WriteLine("        CORTE DE TURNO ACTUAL    ");
@@ -271,7 +326,7 @@ namespace CafeteriaInventario
                         }
                         break;
 
-                    case "9":
+                    case "10":
                         Console.WriteLine("Cerrando sistema...");
                         salir = true;
                         break;
