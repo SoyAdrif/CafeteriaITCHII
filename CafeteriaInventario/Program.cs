@@ -42,27 +42,84 @@ namespace CafeteriaInventario
                             break;
 
                         case "2":
-                            Console.WriteLine("\n--- VENTA EN MOSTRADOR ---");
-                            string criterioVenta = ConsolaHelper.LeerTextoNoVacio("Pase el código de barras o escriba el nombre del producto: ");
-                            ProductoTerminado? prodVenta = inventarioBD.BuscarProductoUniversal(criterioVenta);
+                            Console.WriteLine("\n==========================================");
+                            Console.WriteLine("        PUNTO DE VENTA - MOSTRADOR        ");
+                            Console.WriteLine("   (Escriba 'cobrar' o 'fin' para pagar)  ");
+                            Console.WriteLine("   (Escriba 'cancelar' para abortar orden)");
+                            Console.WriteLine("==========================================");
 
-                            if (prodVenta != null)
+                            var carrito = new List<ItemVentaTemporal>();
+                            bool ordenAbierta = true;
+
+                            while (ordenAbierta)
                             {
-                                bool esReceta = inventarioBD.TieneReceta(prodVenta.Sku);
+                                Console.Write("\nEscanee código de barras o escriba nombre: ");
+                                string entradaCajero = (Console.ReadLine() ?? "").Trim();
 
-                                if (esReceta)
+                                if (string.IsNullOrEmpty(entradaCajero))
+                                    continue;
+
+                                string comando = entradaCajero.ToLower();
+
+                                if (comando == "cobrar" || comando == "fin" || comando == "pagar")
                                 {
-                                    Console.WriteLine($"-> Bebida/Preparación: [{prodVenta.Sku}] {prodVenta.Nombre}");
-                                    decimal cantElab = ConsolaHelper.LeerDecimalPositivo("¿Cuántas tazas o porciones desea preparar?: ");
-                                    inventarioBD.VenderProductoElaborado(prodVenta.Sku, cantElab);
+                                    if (carrito.Count == 0)
+                                    {
+                                        Console.WriteLine("-> La orden está vacía. No hay nada que cobrar.");
+                                        break;
+                                    }
+
+                                    // Resumen antes de liquidar
+                                    decimal totalPagar = 0;
+                                    Console.WriteLine("\n--- RESUMEN DE LA ORDEN ---");
+                                    foreach (var it in carrito)
+                                    {
+                                        Console.WriteLine($"* {it.Cantidad}x [{it.Producto.Sku}] {it.Producto.Nombre} - ${it.Subtotal:F2}");
+                                        totalPagar += it.Subtotal;
+                                    }
+                                    Console.WriteLine($"TOTAL A LIQUIDAR: ${totalPagar:F2}");
+                                    Console.Write("¿Confirmar cobro y actualizar inventario? (s/n): ");
+                                    if ((Console.ReadLine() ?? "").Trim().ToLower() == "s")
+                                    {
+                                        inventarioBD.ProcesarTicketVenta(carrito);
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("-> Cobro pausado/cancelado. El inventario no fue modificado.");
+                                    }
+                                    ordenAbierta = false;
+                                }
+                                else if (comando == "cancelar" || comando == "salir")
+                                {
+                                    Console.WriteLine("-> Orden cancelada por el cajero.");
+                                    ordenAbierta = false;
                                 }
                                 else
                                 {
-                                    Console.WriteLine($"-> Producto físico: [{prodVenta.Sku}] {prodVenta.Nombre} (Disponibles: {prodVenta.Existencias})");
-                                    decimal cantVenta = ConsolaHelper.LeerDecimalPositivo("¿Cuántas piezas va a vender?: ");
-                                    inventarioBD.RegistrarVenta(prodVenta.Sku, cantVenta);
+                                    // Buscar producto con Smart Search
+                                    ProductoTerminado? prod = inventarioBD.BuscarProductoUniversal(entradaCajero);
+                                    if (prod != null)
+                                    {
+                                        bool esReceta = inventarioBD.TieneReceta(prod.Sku);
+                                        decimal cant = ConsolaHelper.LeerDecimalPositivo($"¿Cuántas unidades de [{prod.Nombre}]?: ");
+
+                                        // Si ya estaba en la orden, se acumula la cantidad
+                                        var existente = carrito.FirstOrDefault(x => x.Producto.Sku == prod.Sku);
+                                        if (existente != null)
+                                        {
+                                            existente.Cantidad += cant;
+                                        }
+                                        else
+                                        {
+                                            carrito.Add(new ItemVentaTemporal(prod, cant, esReceta));
+                                        }
+
+                                        decimal subtotalActual = carrito.Sum(x => x.Subtotal);
+                                        Console.WriteLine($"-> Agregado. Artículos en orden: {carrito.Count} | Subtotal acumulado: ${subtotalActual:F2}");
+                                    }
                                 }
                             }
+
                             ConsolaHelper.PausaContinuar();
                             break;
 

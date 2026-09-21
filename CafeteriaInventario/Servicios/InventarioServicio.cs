@@ -973,6 +973,133 @@ namespace CafeteriaInventario.Servicios
                     }
                 }
             }
-        }               
+        }  
+// Procesa la venta de múltiples artículos en un solo ticket garantizando atomicidad
+        public bool ProcesarTicketVenta(List<Modelos.ItemVentaTemporal> items)
+        {
+            if (items == null || items.Count == 0)
+                return false;
+
+            using (var con = _bd.ObtenerConexion())
+            using (var tx = con.BeginTransaction())
+            {
+                try
+                {
+                    decimal totalTicket = 0;
+                    int totalPiezas = 0;
+
+                    foreach (var item in items)
+                    {
+                        if (item.EsReceta)
+                        {
+                            // Verificar insumos de la receta
+                            string queryReceta = @"
+                                SELECT r.insumo_id, i.nombre, r.cantidad_requerida, i.stock_actual, i.unidad_medida
+                                FROM recetas r
+                                JOIN insumos i ON r.insumo_id = i.id
+                                WHERE r.producto_sku = @sku;
+                            ";
+
+                            using (var cmdRec = new SqliteCommand(queryReceta, con, tx))
+                            {
+                                cmdRec.Parameters.AddWithValue("@sku", item.Producto.Sku);
+                                using (var reader = cmdRec.ExecuteReader())
+                                {
+                                    while (reader.Read())
+                                    {
+                                        long insId = reader.GetInt64(0);
+                                        string insNom = reader.GetString(1);
+                                        decimal dosis = reader.GetDecimal(2);
+                                        decimal stockIns = reader.GetDecimal(3);
+                                        string unidad = reader.GetString(4);
+
+                                        decimal totalRequerido = dosis * item.Cantidad;
+                                        if (stockIns < totalRequerido)
+                                        {
+                                            tx.Rollback();
+                                            Console.WriteLine($"\n-> Cancelado: Falta insumo '{insNom}' para preparar [{item.Producto.Nombre}].");
+                                            Console.WriteLine($"   Se requerían {totalRequerido} {unidad}, existencias: {stockIns} {unidad}.");
+                                            return false;
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Descontar materias primas
+                            string updateInsumos = @"
+                                UPDATE insumos 
+                                SET stock_actual = stock_actual - (r.cantidad_requerida * @cant)
+                                FROM recetas r
+                                WHERE insumos.id = r.insumo_id AND r.producto_sku = @sku;
+                            ";
+                            using (var cmdUpIns = new SqliteCommand(updateInsumos, con, tx))
+                            {
+                                cmdUpIns.Parameters.AddWithValue("@cant", item.Cantidad);
+                                cmdUpIns.Parameters.AddWithValue("@sku", item.Producto.Sku);
+                                cmdUpIns.ExecuteNonQuery();
+                            }
+                        }
+                        else
+                        {
+                            // Verificar stock físico de producto directo
+                            string queryStock = "SELECT stock_actual FROM productos WHERE sku = @sku;";
+                            decimal stockActual = 0;
+                            using (var cmdStock = new SqliteCommand(queryStock, con, tx))
+                            {
+                                cmdStock.Parameters.AddWithValue("@sku", item.Producto.Sku);
+                                stockActual = Convert.ToDecimal(cmdStock.ExecuteScalar() ?? 0);
+                            }
+
+                            if (stockActual < item.Cantidad)
+                            {
+                                tx.Rollback();
+                                Console.WriteLine($"\n-> Cancelado: Stock insuficiente para [{item.Producto.Nombre}]. Disponible: {stockActual}.");
+                                return false;
+                            }
+
+                            // Descontar producto físico
+                            string updateProd = "UPDATE productos SET stock_actual = stock_actual - @cant WHERE sku = @sku;";
+                            using (var cmdUpProd = new SqliteCommand(updateProd, con, tx))
+                            {
+                                cmdUpProd.Parameters.AddWithValue("@cant", item.Cantidad);
+                                cmdUpProd.Parameters.AddWithValue("@sku", item.Producto.Sku);
+                                cmdUpProd.ExecuteNonQuery();
+                            }
+                        }
+
+                        // Registrar movimiento individual para auditoría
+                        string insertMov = @"
+                            INSERT INTO movimientos (producto_sku, tipo, cantidad, motivo, fecha, estado)
+                            VALUES (@sku, 'Salida', @cant, @motivo, datetime('now'), 'Abierto');
+                        ";
+                        using (var cmdMov = new SqliteCommand(insertMov, con, tx))
+                        {
+                            cmdMov.Parameters.AddWithValue("@sku", item.Producto.Sku);
+                            cmdMov.Parameters.AddWithValue("@cant", item.Cantidad);
+                            cmdMov.Parameters.AddWithValue("@motivo", $"Venta mostrador: {item.Producto.Nombre} (${item.Subtotal:F2})");
+                            cmdMov.ExecuteNonQuery();
+                        }
+
+                        totalTicket += item.Subtotal;
+                        totalPiezas += (int)item.Cantidad;
+                    }
+
+                    tx.Commit();
+                    Console.WriteLine("\n=================================");
+                    Console.WriteLine("       TICKET COBRADO CON ÉXITO   ");
+                    Console.WriteLine("=================================");
+                    Console.WriteLine($"Artículos procesados: {items.Count} ({totalPiezas} piezas en total)");
+                    Console.WriteLine($"TOTAL COBRADO:        ${totalTicket:F2}");
+                    Console.WriteLine("=================================");
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    tx.Rollback();
+                    Console.WriteLine("-> Error al liquidar orden: " + ex.Message);
+                    return false;
+                }
+            }
+        }                     
      }
 }

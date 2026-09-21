@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("CafeteriaInventario")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0fd7626a5970f493fd9d3b0943890ff00d50af39")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2620fc808600352a466da5f73b52fca3e3dede43")]
 [assembly: System.Reflection.AssemblyProductAttribute("CafeteriaInventario")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CafeteriaInventario")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

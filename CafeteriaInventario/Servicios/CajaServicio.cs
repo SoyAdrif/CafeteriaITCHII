@@ -20,27 +20,54 @@ namespace CafeteriaInventario.Servicios
 
             using (var con = _bd.ObtenerConexion())
             {
-                string query = @"
+                // 1. Obtener conteo y unidades vendidas de movimientos abiertos
+                string queryTotales = @"
                     SELECT 
-                        COUNT(m.id) AS total_ventas,
-                        COALESCE(SUM(m.cantidad), 0) AS unidades_vendidas,
-                        COALESCE(SUM(m.cantidad * p.precio_base), 0) AS ingresos_totales,
-                        COALESCE(SUM(m.cantidad * (p.precio_base - p.costo_precio)), 0) AS ganancia_total
-                    FROM movimientos m
-                    INNER JOIN productos p ON m.producto_sku = p.sku
-                    WHERE m.tipo = 'Venta' AND m.estado = 'Abierto';
+                        COUNT(id) AS total_movimientos,
+                        COALESCE(SUM(cantidad), 0) AS unidades_vendidas
+                    FROM movimientos
+                    WHERE tipo = 'Salida' AND estado = 'Abierto';
                 ";
 
-                using (var cmd = new SqliteCommand(query, con))
-                using (var reader = cmd.ExecuteReader())
+                using (var cmdTot = new SqliteCommand(queryTotales, con))
+                using (var readerTot = cmdTot.ExecuteReader())
                 {
-                    if (reader.Read())
+                    if (readerTot.Read())
                     {
-                        reporte.TotalTransaccionesVenta = reader.GetInt32(0);
-                        reporte.TotalUnidadesVendidas = reader.GetDecimal(1);
-                        reporte.TotalIngresos = reader.GetDecimal(2);
-                        reporte.TotalGananciaEstimada = reader.GetDecimal(3);
+                        reporte.TotalTransaccionesVenta = readerTot.GetInt32(0);
+                        reporte.TotalUnidadesVendidas = readerTot.GetDecimal(1);
                     }
+                }
+
+                // 2. Importes y ganancia estimada usando costo_precio
+                string queryFinanciera = @"
+                    SELECT 
+                        m.cantidad,
+                        COALESCE(p.precio_base, 0) AS precio,
+                        COALESCE(p.costo_precio, 0) AS costo
+                    FROM movimientos m
+                    LEFT JOIN productos p ON TRIM(m.producto_sku) = TRIM(p.sku)
+                    WHERE m.tipo = 'Salida' AND m.estado = 'Abierto';
+                ";
+
+                using (var cmdFin = new SqliteCommand(queryFinanciera, con))
+                using (var readerFin = cmdFin.ExecuteReader())
+                {
+                    decimal totalIngresos = 0;
+                    decimal totalCosto = 0;
+
+                    while (readerFin.Read())
+                    {
+                        decimal cant = readerFin.GetDecimal(0);
+                        decimal precio = readerFin.GetDecimal(1);
+                        decimal costo = readerFin.GetDecimal(2);
+
+                        totalIngresos += cant * precio;
+                        totalCosto += cant * costo;
+                    }
+
+                    reporte.TotalIngresos = totalIngresos;
+                    reporte.TotalGananciaEstimada = totalIngresos - totalCosto;
                 }
             }
 
