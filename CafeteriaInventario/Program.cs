@@ -303,7 +303,45 @@ namespace CafeteriaInventario
                         break;
 
                     case "8":
-                        inventarioBD.VerHistorialMovimientos();
+                        Console.WriteLine("\n--- CONSULTA DE AUDITORÍA Y BITÁCORA ---");
+                        Console.WriteLine("1. Ver movimientos del turno actual (Pendientes de corte / Abiertos)");
+                        Console.WriteLine("2. Ver últimos 25 movimientos generales");
+                        Console.WriteLine("3. Filtrar por fecha específica (YYYY-MM-DD)");
+                        Console.WriteLine("4. Volver al menú principal");
+                        Console.Write("Seleccione una opción: ");
+                        string opcBitacora = (Console.ReadLine() ?? "").Trim();
+
+                        switch (opcBitacora)
+                        {
+                            case "1":
+                                inventarioBD.VerHistorialMovimientos("TURNO_ACTUAL");
+                                break;
+
+                            case "2":
+                                inventarioBD.VerHistorialMovimientos("RECIENTES");
+                                break;
+
+                            case "3":
+                                Console.Write("Ingrese la fecha a consultar (ej. 2026-09-21): ");
+                                string fechaFiltro = (Console.ReadLine() ?? "").Trim();
+                                if (!string.IsNullOrEmpty(fechaFiltro))
+                                {
+                                    inventarioBD.VerHistorialMovimientos("FECHA", fechaFiltro);
+                                }
+                                else
+                                {
+                                    Console.WriteLine("Fecha inválida.");
+                                }
+                                break;
+
+                            case "4":
+                                Console.WriteLine("-> Regresando al menú principal...");
+                                break;
+
+                            default:
+                                Console.WriteLine("Opción no válida.");
+                                break;
+                        }
                         break;
 
                     case "9":

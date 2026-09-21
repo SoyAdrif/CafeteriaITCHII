@@ -269,18 +269,65 @@ namespace CafeteriaInventario.Servicios
             }
         }
 
-        public void VerHistorialMovimientos()
+// Consulta avanzada de bitácora con soporte para filtros de auditoría
+        public void VerHistorialMovimientos(string filtro = "RECIENTES", string valorFiltro = "")
         {
             using (var con = _bd.ObtenerConexion())
             {
-                string query = "SELECT producto_sku, tipo, cantidad, motivo, fecha, estado FROM movimientos ORDER BY id DESC LIMIT 10;";
-                using (var cmd = new SqliteCommand(query, con))
-                using (var reader = cmd.ExecuteReader())
+                string queryBase = "SELECT id, producto_sku, tipo, cantidad, motivo, fecha, estado FROM movimientos ";
+                string titulo = "";
+
+                if (filtro == "TURNO_ACTUAL")
                 {
-                    Console.WriteLine("\n--- ÚLTIMOS 10 MOVIMIENTOS EN BITÁCORA ---");
-                    while (reader.Read())
+                    queryBase += "WHERE estado = 'Abierto' ORDER BY id DESC;";
+                    titulo = "--- MOVIMIENTOS DEL TURNO ACTUAL (ESTADO: ABIERTO) ---";
+                }
+                else if (filtro == "FECHA")
+                {
+                    queryBase += "WHERE strftime('%Y-%m-%d', fecha) = @fecha ORDER BY id DESC;";
+                    titulo = $"--- MOVIMIENTOS REGISTRADOS EN LA FECHA [{valorFiltro}] ---";
+                }
+                else // RECIENTES
+                {
+                    queryBase += "ORDER BY id DESC LIMIT 25;";
+                    titulo = "--- ÚLTIMOS 25 MOVIMIENTOS REGISTRADOS ---";
+                }
+
+                using (var cmd = new SqliteCommand(queryBase, con))
+                {
+                    if (filtro == "FECHA")
                     {
-                        Console.WriteLine($"[{reader.GetString(4)}] SKU: {reader.GetString(0)} | {reader.GetString(1)}: {reader.GetDecimal(2)} | Motivo: {reader.GetString(3)} | Turno: {reader.GetString(5)}");
+                        cmd.Parameters.AddWithValue("@fecha", valorFiltro.Trim());
+                    }
+
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        Console.WriteLine($"\n=================================");
+                        Console.WriteLine(titulo);
+                        Console.WriteLine("=================================");
+
+                        bool hayRegistros = false;
+                        while (reader.Read())
+                        {
+                            hayRegistros = true;
+                            long id = reader.GetInt64(0);
+                            string sku = reader.GetString(1);
+                            string tipo = reader.GetString(2);
+                            decimal cant = reader.GetDecimal(3);
+                            string motivo = reader.GetString(4);
+                            string fecha = reader.GetString(5);
+                            string estado = reader.GetString(6);
+
+                            Console.WriteLine($"#{id} | [{fecha}] | {tipo.ToUpper()} | Cant: {cant} | Ref: {sku} | Turno: {estado}");
+                            Console.WriteLine($"   Detalle: {motivo}");
+                        }
+
+                        if (!hayRegistros)
+                        {
+                            Console.WriteLine("-> No se encontraron registros con el criterio seleccionado.");
+                        }
+
+                        Console.WriteLine("=================================");
                     }
                 }
             }
