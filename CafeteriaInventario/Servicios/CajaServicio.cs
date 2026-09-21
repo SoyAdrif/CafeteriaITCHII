@@ -60,5 +60,92 @@ namespace CafeteriaInventario.Servicios
                 }
             }
         }
+// Genera el ranking de productos más vendidos en el turno actual
+        public void MostrarTopProductosVendidos(int top = 3)
+        {
+            using (var con = _bd.ObtenerConexion())
+            {
+                string query = @"
+                    SELECT m.producto_sku, p.nombre, SUM(m.cantidad) AS total_unidades
+                    FROM movimientos m
+                    JOIN productos p ON m.producto_sku = p.sku
+                    WHERE m.tipo = 'Salida' AND m.estado = 'Abierto'
+                    GROUP BY m.producto_sku, p.nombre
+                    ORDER BY total_unidades DESC
+                    LIMIT @top;
+                ";
+
+                using (var cmd = new SqliteCommand(query, con))
+                {
+                    cmd.Parameters.AddWithValue("@top", top);
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        Console.WriteLine("\n=================================");
+                        Console.WriteLine($"    TOP {top} PRODUCTOS MÁS VENDIDOS (TURNO)");
+                        Console.WriteLine("=================================");
+
+                        int posicion = 1;
+                        bool hayDatos = false;
+                        while (reader.Read())
+                        {
+                            hayDatos = true;
+                            string sku = reader.GetString(0);
+                            string nombre = reader.GetString(1);
+                            decimal total = reader.GetDecimal(2);
+
+                            Console.WriteLine($"{posicion}°. [{sku}] {nombre} - {total:F0} unidades despachadas");
+                            posicion++;
+                        }
+
+                        if (!hayDatos)
+                        {
+                            Console.WriteLine("-> No se han registrado ventas en el turno actual.");
+                        }
+
+                        Console.WriteLine("=================================");
+                    }
+                }
+            }
+        }
+
+        // Resumen de bajas o mermas administrativas del turno
+        public void MostrarResumenBajasTurno()
+        {
+            using (var con = _bd.ObtenerConexion())
+            {
+                string query = @"
+                    SELECT producto_sku, motivo, fecha
+                    FROM movimientos
+                    WHERE tipo = 'Baja' AND estado = 'Abierto'
+                    ORDER BY id DESC;
+                ";
+
+                using (var cmd = new SqliteCommand(query, con))
+                using (var reader = cmd.ExecuteReader())
+                {
+                    Console.WriteLine("\n=================================");
+                    Console.WriteLine("    RESUMEN DE BAJAS Y MERMAS (TURNO)");
+                    Console.WriteLine("=================================");
+
+                    bool hayBajas = false;
+                    while (reader.Read())
+                    {
+                        hayBajas = true;
+                        string sku = reader.GetString(0);
+                        string motivo = reader.GetString(1);
+                        string fecha = reader.GetString(2);
+
+                        Console.WriteLine($"[{fecha}] SKU: {sku} | {motivo}");
+                    }
+
+                    if (!hayBajas)
+                    {
+                        Console.WriteLine("-> No hay bajas administrativas registradas en el turno actual.");
+                    }
+
+                    Console.WriteLine("=================================");
+                }
+            }
+        }        
     }
 }
