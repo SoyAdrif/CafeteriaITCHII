@@ -1,18 +1,19 @@
 # Sistema de Gestión de Inventario y Punto de Venta (POS) - Cafetería ITCH II
 
-Sistema integral para la administración de inventario, recetas de barra, promociones automáticas, venta en mostrador y auditoría financiera desarrollado en **C# (.NET 10)** con persistencia relacional en **SQLite**. Implementado bajo los principios de la **Programación Orientada a Objetos (POO)** y las directrices de ingeniería de software del **Tecnológico Nacional de México Campus Chihuahua II**.
+Sistema integral para la administración de inventario, recetas de barra, venta de mostrador multilínea (estilo supermercado/ticket atómico), promociones automáticas y auditoría financiera desarrollado en **C# (.NET 10)** con persistencia relacional en **SQLite**. Desarrollado bajo los principios de la **Programación Orientada a Objetos (POO)** y la metodología de ingeniería de software del **Tecnológico Nacional de México Campus Chihuahua II**.
 
 ---
 
-## 1. Fundamentos de Diseño Orientado a Objetos (POO)
+## 1. Fundamentos Arquitectónicos y Metodología (TecNM II)
 
-* **Abstracción y Encapsulamiento:** Clases base con atributos protegidos/públicos y operaciones de negocio controladas en capas de servicio desacopladas.
-* **Herencia (Generalización):** Clase abstracta `ItemInventarioBase` especializada en `ProductoTerminado` (artículos físicos directos) y `ProductoElaborado` (preparaciones por receta).
-* **Polimorfismo por Sobrescritura (`Override`):** Redefinición del método abstracto `DescontarExistencias(decimal)` según la naturaleza del artículo.
-* **Polimorfismo por Sobrecarga (`Overload`):** Múltiples firmas en métodos de venta para procesar cobros regulares o aplicar promociones y descuentos porcentuales (`RegistrarVenta(sku, cant)` vs `RegistrarVenta(sku, cant, desc)`).
-* **Composición:** Relación de vida dependiente entre un producto preparado y su lista de insumos (`Ingrediente`).
-* **Búsqueda Universal (Smart Search):** Resolución polimórfica compatible con lectores de códigos de barras (EAN-13), códigos numéricos de teclado rápido o cadenas de texto parciales.
-* **Blindaje y Manejo de Excepciones:** Desacoplamiento de la validación de entradas mediante `ConsolaHelper` y bloques `try-catch` transaccionales para garantizar una operación continua y tolerante a fallos de usuario.
+* **Abstracción y Encapsulamiento:** Ocultamiento de la representación interna de datos y exposición de operaciones de negocio mediante contratos de servicio.
+* **Herencia (Generalización):** Clase base abstracta `ItemInventarioBase` especializada en `ProductoTerminado` (físico directo) y `ProductoElaborado` (artículo elaborado por receta).
+* **Polimorfismo:** Sobrescritura (`override`) de `DescontarExistencias` y sobrecarga (`overload`) de métodos para ventas regulares vs. ventas con descuentos o promociones combinadas.
+* **Composición y Agregación:** 
+  * `ProductoElaborado` mantiene una relación existencial fuerte de composición con sus `Ingrediente` (1..*).
+  * El ticket de compra utiliza agregación temporal con instancias de `ItemVentaTemporal`.
+* **Transacciones Atómicas (ACID):** Despacho seguro de órdenes multilínea (`ProcesarTicketVenta`) donde la deducción de ingredientes de recetas y stock físico ocurre dentro de un bloque transaccional (`BeginTransaction` / `Commit` / `Rollback`).
+* **Blindaje de Entradas:** Validación centralizada mediante `ConsolaHelper` para mitigar errores de captura sin interrumpir el ciclo de vida de la aplicación.
 
 ---
 
@@ -22,7 +23,6 @@ Sistema integral para la administración de inventario, recetas de barra, promoc
 classDiagram
     direction TB
 
-    %% Jerarquía de Herencia
     class ItemInventarioBase {
         <<abstract>>
         +long Id
@@ -56,6 +56,14 @@ classDiagram
         +Ingrediente(long id, string nombre, decimal cantidadRequerida, string unidadMedida)
     }
 
+    class ItemVentaTemporal {
+        +ProductoTerminado Producto
+        +decimal Cantidad
+        +bool EsReceta
+        +decimal Subtotal
+        +ItemVentaTemporal(ProductoTerminado producto, decimal cantidad, bool esReceta)
+    }
+
     class MovimientoInventario {
         +long Id
         +string ProductoSku
@@ -74,7 +82,6 @@ classDiagram
         +decimal TotalGananciaEstimada
     }
 
-    %% Capa de Servicios y Utilidades
     class BaseDatosServicio {
         -string CadenaConexion
         +ObtenerConexion() SqliteConnection
@@ -92,6 +99,7 @@ classDiagram
         +RegistrarVenta(string sku, decimal cantidad, decimal porcentajeDescuento) bool
         +VenderProductoElaborado(string sku, decimal porciones) bool
         +VenderProductoElaborado(string sku, decimal porciones, decimal porcentajeDescuento) bool
+        +ProcesarTicketVenta(List~ItemVentaTemporal~ items) bool
         +ReabastecerStock(string sku, decimal cantidad) bool
         +ReabastecerInsumo(long insumoId, decimal cantidad) bool
         +RegistrarNuevoProducto(string sku, string nombre, decimal precio, decimal costo, decimal stock, decimal minimo) bool
@@ -118,64 +126,39 @@ classDiagram
         +PausaContinuar() void
     }
 
-    %% Relaciones
     ItemInventarioBase <|-- ProductoTerminado : Herencia
     ItemInventarioBase <|-- ProductoElaborado : Herencia
     ProductoElaborado *-- Ingrediente : Composición (1..*)
+    ItemVentaTemporal o-- ProductoTerminado : Agregación
     
     InventarioServicio ..> BaseDatosServicio : Dependencia
     CajaServicio ..> BaseDatosServicio : Dependencia
-    InventarioServicio ..> ProductoTerminado : Manipula
+    InventarioServicio ..> ItemVentaTemporal : Procesa
     InventarioServicio ..> MovimientoInventario : Registra
     CajaServicio ..> ReporteCorteCaja : Genera
 ```
 
 ---
 
-## 3. Diagrama de Casos de Uso (Flujos del Sistema)
+## 3. Diagrama de Secuencia: Venta Multilínea y Liquidación Atómica
 
 ```mermaid
-flowchart LR
-    subgraph Actores
-        U[Cajero / Encargado de Barra]
-        A[Administrador]
+sequenceDiagram
+    autonumber
+    actor Cajero
+    participant Vista as Program (Consola / GUI)
+    participant Carrito as List~ItemVentaTemporal~
+    participant Servicio as InventarioServicio
+    participant BD as SQLite (cafeteria.db)
+
+    loop Captura de Artículos (Estilo Supermercado)
+        Cajero->>Vista: Escanea código o ingresa nombre + cantidad
+        Vista->>Servicio: BuscarProductoUniversal(criterio)
+        Servicio->>BD: SELECT producto / receta
+        BD-->>Servicio: Registro de catálogo
+        Servicio-->>Vista: Instancia ProductoTerminado
+        Vista->>Carrito: Add(ItemVentaTemporal)
+        Carrito-->>Vista: Subtotal acumulado en pantalla
     end
 
-    subgraph Casos_de_Uso [Casos de Uso del POS]
-        CU1(Consultar Catálogo y Existencias)
-        CU2(Cobrar Venta Directa o Receta)
-        CU3(Aplicar Promoción o Combo Desayuno)
-        CU4(Reabastecer Productos e Insumos)
-        CU5(Dar de Alta Productos y Armar Recetas)
-        CU6(Dar de Baja Artículos)
-        CU7(Consultar Auditoría Filtrada)
-        CU8(Generar Corte y Top 10 de Ventas)
-        CU9(Cerrar Turno de Caja)
-    end
-
-    U --> CU1
-    U --> CU2
-    U --> CU3
-    U --> CU4
-
-    A --> CU1
-    A --> CU4
-    A --> CU5
-    A --> CU6
-    A --> CU7
-    A --> CU8
-    A --> CU9
-```
-
----
-
-## 4. Instrucciones de Compilación y Ejecución
-
-1. Situarse en la carpeta raíz del proyecto de consola:
-   ```bash
-   cd /workspaces/CafeteriaITCHII/CafeteriaInventario
-   ```
-2. Compilar y ejecutar con el CLI de .NET:
-   ```bash
-   dotnet run
-   ```
+    Cajero->>Vista: Comando 'cobrar' / 'pagar'
