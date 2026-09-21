@@ -19,45 +19,46 @@ namespace CafeteriaInventario.Servicios
         {
             using (var con = _bd.ObtenerConexion())
             {
-                string query = "SELECT sku, nombre, precio_base, stock_actual, stock_minimo FROM productos;";
+                // Unimos con la tabla recetas para saber si el artículo es una preparación
+                string query = @"
+                    SELECT p.sku, p.nombre, p.precio_base, p.stock_actual, p.stock_minimo,
+                           COUNT(r.id) AS total_ingredientes
+                    FROM productos p
+                    LEFT JOIN recetas r ON p.sku = r.producto_sku
+                    GROUP BY p.sku;
+                ";
+
                 using (var cmd = new SqliteCommand(query, con))
                 using (var reader = cmd.ExecuteReader())
                 {
-                    Console.WriteLine("\n--- CATÁLOGO DE PRODUCTOS ---");
+                    Console.WriteLine("\n=================================");
+                    Console.WriteLine("       INVENTARIO GENERAL        ");
+                    Console.WriteLine("=================================");
+
                     while (reader.Read())
                     {
                         string sku = reader.GetString(0);
                         string nombre = reader.GetString(1);
                         decimal precio = reader.GetDecimal(2);
                         decimal stock = reader.GetDecimal(3);
-                        decimal minimo = reader.GetDecimal(4);
+                        decimal stockMinimo = reader.GetDecimal(4);
+                        long totalIngredientes = reader.GetInt64(5);
 
-                        string alerta = stock <= minimo ? $" [BAJO STOCK - Mín: {minimo}]" : "";
-                        Console.WriteLine($"[{sku}] {nombre} - ${precio:F2} | Stock: {stock}{alerta}");
+                        // Si tiene ingredientes vinculados, se cataloga como Receta
+                        if (totalIngredientes > 0)
+                        {
+                            Console.WriteLine($"[{sku}] {nombre} - ${precio:F2} | [Receta / Preparación en barra]");
+                        }
+                        else
+                        {
+                            string alertaStock = stock <= stockMinimo 
+                                ? $" [BAJO STOCK - Mín: {stockMinimo}]" 
+                                : "";
+
+                            Console.WriteLine($"[{sku}] {nombre} - ${precio:F2} | Stock: {stock}{alertaStock}");
+                        }
                     }
-                }
-            }
-        }
-
-        public void ListarInsumosBarra()
-        {
-            using (var con = _bd.ObtenerConexion())
-            {
-                string query = "SELECT nombre, stock_actual, unidad_medida, stock_minimo FROM insumos;";
-                using (var cmd = new SqliteCommand(query, con))
-                using (var reader = cmd.ExecuteReader())
-                {
-                    Console.WriteLine("\n--- INSUMOS EN BARRA (PERSISTENTES) ---");
-                    while (reader.Read())
-                    {
-                        string nombre = reader.GetString(0);
-                        decimal stock = reader.GetDecimal(1);
-                        string unidad = reader.GetString(2);
-                        decimal minimo = reader.GetDecimal(3);
-
-                        string alerta = stock <= minimo ? $" [BAJO STOCK - Mín: {minimo}{unidad}]" : "";
-                        Console.WriteLine($"- {nombre}: {stock:F1} {unidad} restantes{alerta}");
-                    }
+                    Console.WriteLine("=================================");
                 }
             }
         }
@@ -504,5 +505,233 @@ namespace CafeteriaInventario.Servicios
                 }
             }
         }
-}
+// Listar insumos con ID para facilitar la selección al armar recetas
+        public void ListarInsumosConId()
+        {
+            using (var con = _bd.ObtenerConexion())
+            {
+                string query = "SELECT id, nombre, unidad_medida, stock_actual FROM insumos;";
+                using (var cmd = new SqliteCommand(query, con))
+                using (var reader = cmd.ExecuteReader())
+                {
+                    Console.WriteLine("\n--- CATÁLOGO DE INSUMOS DISPONIBLES ---");
+                    while (reader.Read())
+                    {
+                        Console.WriteLine($"ID: {reader.GetInt64(0)} | {reader.GetString(1)} ({reader.GetString(2)}) - Stock actual: {reader.GetDecimal(3):F1}");
+                    }
+                }
+            }
+        }
+
+        // Asignar o agregar un ingrediente a la receta de un producto
+// Asignar o agregar un ingrediente a la receta de un producto con validación de clave foránea
+        public bool AgregarIngredienteAReceta(string sku, long insumoId, decimal cantidadRequerida)
+        {
+            using (var con = _bd.ObtenerConexion())
+            {
+                // 1. Validar que el producto exista antes de intentar vincular
+                string checkProducto = "SELECT COUNT(*) FROM productos WHERE sku = @sku;";
+                using (var cmdProd = new SqliteCommand(checkProducto, con))
+                {
+                    cmdProd.Parameters.AddWithValue("@sku", sku.Trim());
+                    long totalProd = Convert.ToInt64(cmdProd.ExecuteScalar() ?? 0);
+                    if (totalProd == 0)
+                    {
+                        Console.WriteLine($"-> Error: El producto con SKU '{sku}' no existe en el catálogo.");
+                        Console.WriteLine("-> Debe registrar el producto primero (opción a) antes de asignarle una receta.");
+                        return false;
+                    }
+                }
+
+                // 2. Validar que el insumo exista
+                string checkInsumo = "SELECT COUNT(*) FROM insumos WHERE id = @id;";
+                using (var cmdInsumo = new SqliteCommand(checkInsumo, con))
+                {
+                    cmdInsumo.Parameters.AddWithValue("@id", insumoId);
+                    long totalInsumo = Convert.ToInt64(cmdInsumo.ExecuteScalar() ?? 0);
+                    if (totalInsumo == 0)
+                    {
+                        Console.WriteLine($"-> Error: El insumo con ID {insumoId} no existe.");
+                        return false;
+                    }
+                }
+
+                // 3. Inserción protegida en la tabla recetas
+                try
+                {
+                    string queryInsert = @"
+                        INSERT INTO recetas (producto_sku, insumo_id, cantidad_requerida)
+                        VALUES (@sku, @insumoId, @cant);
+                    ";
+
+                    using (var cmd = new SqliteCommand(queryInsert, con))
+                    {
+                        cmd.Parameters.AddWithValue("@sku", sku.Trim());
+                        cmd.Parameters.AddWithValue("@insumoId", insumoId);
+                        cmd.Parameters.AddWithValue("@cant", cantidadRequerida);
+                        cmd.ExecuteNonQuery();
+                    }
+
+                    Console.WriteLine("-> Materia prima vinculada exitosamente a la receta.");
+                    return true;
+                }
+                catch (SqliteException ex)
+                {
+                    Console.WriteLine("-> Error de integridad en base de datos: " + ex.Message);
+                    return false;
+                }
+            }
+        }
+        // Registrar un producto elaborado (receta) con SKU, nombre, precio y costo
+        public bool RegistrarProductoElaborado(string sku, string nombre, decimal precio, decimal costo)
+        {
+            using (var con = _bd.ObtenerConexion())
+            {
+                string checkQuery = "SELECT COUNT(*) FROM productos WHERE sku = @sku;";
+                using (var checkCmd = new SqliteCommand(checkQuery, con))
+                {
+                    checkCmd.Parameters.AddWithValue("@sku", sku.Trim());
+                    long existe = Convert.ToInt64(checkCmd.ExecuteScalar() ?? 0);
+                    if (existe > 0)
+                    {
+                        Console.WriteLine($"-> Error: El SKU '{sku}' ya existe.");
+                        return false;
+                    }
+                }
+
+                // Se registra con stock 0 y stock_minimo 0 porque sus existencias dependen de los insumos
+                string queryInsert = @"
+                    INSERT INTO productos (sku, nombre, precio_base, costo_precio, stock_actual, stock_minimo)
+                    VALUES (@sku, @nombre, @precio, @costo, 0, 0);
+                ";
+                using (var cmd = new SqliteCommand(queryInsert, con))
+                {
+                    cmd.Parameters.AddWithValue("@sku", sku.Trim());
+                    cmd.Parameters.AddWithValue("@nombre", nombre.Trim());
+                    cmd.Parameters.AddWithValue("@precio", precio);
+                    cmd.Parameters.AddWithValue("@costo", costo);
+                    cmd.ExecuteNonQuery();
+                }
+
+                Console.WriteLine($"-> Producto elaborado '{nombre}' registrado. Proceda a agregar sus ingredientes.");
+                return true;
+            }
+        }
+
+        // Saber si un producto tiene receta asociada
+        public bool TieneReceta(string sku)
+        {
+            using (var con = _bd.ObtenerConexion())
+            {
+                string query = "SELECT COUNT(*) FROM recetas WHERE producto_sku = @sku;";
+                using (var cmd = new SqliteCommand(query, con))
+                {
+                    cmd.Parameters.AddWithValue("@sku", sku.Trim());
+                    return Convert.ToInt64(cmd.ExecuteScalar() ?? 0) > 0;
+                }
+            }
+        }
+// Consulta del inventario de materias primas en barra con alerta de stock mínimo
+        public void ListarInsumosBarra()
+        {
+            using (var con = _bd.ObtenerConexion())
+            {
+                string query = "SELECT id, nombre, unidad_medida, stock_actual, stock_minimo FROM insumos;";
+                using (var cmd = new SqliteCommand(query, con))
+                using (var reader = cmd.ExecuteReader())
+                {
+                    Console.WriteLine("\n=================================");
+                    Console.WriteLine("    EXISTENCIAS EN BARRA (INSUMOS) ");
+                    Console.WriteLine("=================================");
+
+                    while (reader.Read())
+                    {
+                        long id = reader.GetInt64(0);
+                        string nombre = reader.GetString(1);
+                        string unidad = reader.GetString(2);
+                        decimal stock = reader.GetDecimal(3);
+                        decimal stockMinimo = reader.GetDecimal(4);
+
+                        string alerta = stock <= stockMinimo 
+                            ? $" [BAJO STOCK - Mín: {stockMinimo} {unidad}]" 
+                            : "";
+
+                        Console.WriteLine($"ID {id} | {nombre}: {stock:F1} {unidad}{alerta}");
+                    }
+                    Console.WriteLine("=================================");
+                }
+            }
+        } 
+// Reabastecimiento de materias primas en barra con auditoría
+        public bool ReabastecerInsumo(long insumoId, decimal cantidad)
+        {
+            if (cantidad <= 0)
+            {
+                Console.WriteLine("-> La cantidad a reabastecer debe ser mayor a 0.");
+                return false;
+            }
+
+            using (var con = _bd.ObtenerConexion())
+            {
+                // 1. Obtener datos actuales del insumo
+                string querySelect = "SELECT nombre, unidad_medida, stock_actual FROM insumos WHERE id = @id;";
+                string nombre = "";
+                string unidad = "";
+                decimal stockActual = 0;
+
+                using (var cmdSelect = new SqliteCommand(querySelect, con))
+                {
+                    cmdSelect.Parameters.AddWithValue("@id", insumoId);
+                    using (var reader = cmdSelect.ExecuteReader())
+                    {
+                        if (!reader.Read())
+                        {
+                            Console.WriteLine($"-> Error: Insumo con ID {insumoId} no encontrado.");
+                            return false;
+                        }
+                        nombre = reader.GetString(0);
+                        unidad = reader.GetString(1);
+                        stockActual = reader.GetDecimal(2);
+                    }
+                }
+
+                // 2. Transacción de actualización y registro
+                using (var tx = con.BeginTransaction())
+                {
+                    try
+                    {
+                        string queryUpdate = "UPDATE insumos SET stock_actual = stock_actual + @cant WHERE id = @id;";
+                        using (var cmdUpdate = new SqliteCommand(queryUpdate, con, tx))
+                        {
+                            cmdUpdate.Parameters.AddWithValue("@cant", cantidad);
+                            cmdUpdate.Parameters.AddWithValue("@id", insumoId);
+                            cmdUpdate.ExecuteNonQuery();
+                        }
+
+                        string movInsert = @"
+                            INSERT INTO movimientos (producto_sku, tipo, cantidad, motivo, fecha, estado)
+                            VALUES (@sku, 'Entrada', @cant, @motivo, datetime('now'), 'Abierto');
+                        ";
+                        using (var cmdMov = new SqliteCommand(movInsert, con, tx))
+                        {
+                            cmdMov.Parameters.AddWithValue("@sku", $"INS-{insumoId}");
+                            cmdMov.Parameters.AddWithValue("@cant", cantidad);
+                            cmdMov.Parameters.AddWithValue("@motivo", $"Reabastecimiento de insumo: {nombre}");
+                            cmdMov.ExecuteNonQuery();
+                        }
+
+                        tx.Commit();
+                        Console.WriteLine($"-> Insumo '{nombre}' actualizado: {stockActual:F1} {unidad} -> {(stockActual + cantidad):F1} {unidad}.");
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        tx.Rollback();
+                        Console.WriteLine("-> Error al reabastecer insumo: " + ex.Message);
+                        return false;
+                    }
+                }
+            }
+        }        
+     }
 }
