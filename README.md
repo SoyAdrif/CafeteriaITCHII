@@ -1,32 +1,27 @@
 # Sistema de Gestión de Inventario y Punto de Venta (POS) - Cafetería ITCH II
 
-Sistema modular para el control de inventario, recetas de barra, venta en mostrador y cortes de caja desarrollado en **C# (.NET 10)** y persistencia relacional con **SQLite**. Diseñado bajo los principios de la **Programación Orientada a Objetos (POO)** y la metodología de desarrollo de software del **Tecnológico Nacional de México Campus Chihuahua II**.
+Sistema integral para la administración de inventario, recetas de barra, reabastecimiento, venta en mostrador y auditoría financiera desarrollado en **C# (.NET 10)** con persistencia relacional en **SQLite**. Desarrollado bajo los principios de la **Programación Orientada a Objetos (POO)** y la metodología de ingeniería de software del **Tecnológico Nacional de México Campus Chihuahua II**.
 
 ---
 
-## 1. Metodología de Desarrollo (TecNM II)
+## 1. Fundamentos Arquitectónicos y Metodología (TecNM II)
 
-El proyecto se estructuró siguiendo las etapas formales de ingeniería de software:
-1. **Análisis del problema y requerimientos:** Identificación de entradas (SKU alfanumérico, códigos de barra EAN-13, teclado rápido, nombres), restricciones de stock y salidas deseadas (bitácora, deducciones y corte financiero).
-2. **Diseño y estructuración de clases:** 
-   - Abstracción de entidades base (`ItemInventarioBase`).
-   - Jerarquía de generalización/especialización (Herencia) para productos directos y preparados.
-   - Relación de composición estricta para el modelado de recetas e insumos.
-3. **Implementación y desacoplamiento:** Separación en capas de **Modelos** y **Servicios** con persistencia atómica mediante transacciones SQL.
-4. **Prueba y verificación final:** Validación con conjuntos de datos reales (ventas unitarias, recetas compuestas, prevención de sobreventa y cierres de turno).
-5. **Mantenimiento y actualización:** Incorporación de búsqueda universal polimórfica (*Smart Search*) y umbrales de stock mínimo configurables por producto.
+El sistema se diseñó cubriendo las etapas de análisis, diseño, codificación y verificación:
+* **Abstracción y Encapsulamiento:** Clases base con atributos protegidos/públicos y operaciones de negocio controladas.
+* **Herencia (Generalización):** Clase abstracta `ItemInventarioBase` como superclase de `ProductoTerminado` y `ProductoElaborado`.
+* **Polimorfismo:** Implementación del método abstracto `DescontarExistencias(decimal)` redefinido (`override`) según el comportamiento de la entidad.
+* **Composición:** Relación existencial fuerte entre un producto preparado y su lista de insumos (`Ingrediente`).
+* **Búsqueda Universal (Smart Search):** Algoritmo de resolución polimórfica que interpreta códigos de barra (EAN-13), códigos numéricos de teclado rápido o cadenas de texto parciales.
 
 ---
 
-## 2. Diagrama de Clases UML (Estructura y Relaciones)
-
-El siguiente diagrama modela la arquitectura completa del backend, reflejando generalización, composición, encapsulamiento y dependencias de servicio:
+## 2. Diagrama de Clases UML
 
 ```mermaid
 classDiagram
     direction TB
 
-    %% Jerarquía de Herencia (Generalización)
+    %% Jerarquía de Herencia
     class ItemInventarioBase {
         <<abstract>>
         +long Id
@@ -78,7 +73,7 @@ classDiagram
         +decimal TotalGananciaEstimada
     }
 
-    %% Servicios del Sistema
+    %% Capa de Servicios
     class BaseDatosServicio {
         -string CadenaConexion
         +ObtenerConexion() SqliteConnection
@@ -89,10 +84,18 @@ classDiagram
         -BaseDatosServicio _bd
         +ListarProductos() void
         +ListarInsumosBarra() void
+        +ListarInsumosConId() void
+        +BuscarProductoUniversal(string criterio) ProductoTerminado
+        +TieneReceta(string sku) bool
         +RegistrarVenta(string sku, decimal cantidad) bool
         +VenderProductoElaborado(string sku, decimal porciones) bool
         +ReabastecerStock(string sku, decimal cantidad) bool
-        +BuscarProductoUniversal(string criterio) ProductoTerminado
+        +ReabastecerInsumo(long insumoId, decimal cantidad) bool
+        +RegistrarNuevoProducto(string sku, string nombre, decimal precio, decimal costo, decimal stock, decimal minimo) bool
+        +RegistrarNuevoInsumo(string nombre, string unidad, decimal stock, decimal minimo) bool
+        +RegistrarProductoElaborado(string sku, string nombre, decimal precio, decimal costo) bool
+        +AgregarIngredienteAReceta(string sku, long insumoId, decimal cantidadRequerida) bool
+        +EliminarProducto(string sku) bool
         +VerHistorialMovimientos() void
     }
 
@@ -102,66 +105,75 @@ classDiagram
         +CerrarTurnoCaja() void
     }
 
-    %% Relaciones UML
-    ItemInventarioBase <|-- ProductoTerminado : Herencia (Generalización)
-    ItemInventarioBase <|-- ProductoElaborado : Herencia (Generalización)
+    %% Relaciones
+    ItemInventarioBase <|-- ProductoTerminado : Herencia
+    ItemInventarioBase <|-- ProductoElaborado : Herencia
     ProductoElaborado *-- Ingrediente : Composición (1..*)
     
-    InventarioServicio ..> BaseDatosServicio : Usa
-    CajaServicio ..> BaseDatosServicio : Usa
-    InventarioServicio ..> ProductoTerminado : Retorna / Manipula
-    CajaServicio ..> ReporteCorteCaja : Genera
+    InventarioServicio ..> BaseDatosServicio : Dependencia
+    CajaServicio ..> BaseDatosServicio : Dependencia
+    InventarioServicio ..> ProductoTerminado : Manipula
     InventarioServicio ..> MovimientoInventario : Registra
+    CajaServicio ..> ReporteCorteCaja : Genera
 ```
 
 ---
 
-## 3. Diagrama de Secuencia: Venta con Smart Search y Descuento Atómico
-
-Representa el flujo de control, llamadas y persistencia al procesar una venta desde la consola:
+## 3. Diagrama de Secuencia: Despacho Polimórfico (Directo vs Receta)
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Cajero
-    participant Program as Vista / Consola
-    participant Inventario as InventarioServicio
+    participant Vista as Program (Consola)
+    participant Servicio as InventarioServicio
     participant BD as SQLite (cafeteria.db)
 
-    Cajero->>Program: Ingresa texto, código rápido o escaneo de código de barras
-    Program->>Inventario: BuscarProductoUniversal(criterio)
-    Inventario->>BD: SELECT con WHERE sku = @criterio OR nombre LIKE @criterio
-    BD-->>Inventario: Registros coincidentes
-    alt Coincidencia única
-        Inventario-->>Program: Instancia de ProductoTerminado
-    else Coincidencias múltiples
-        Inventario->>Program: Despliega menú de opciones numeradas
-        Cajero->>Program: Selecciona número de opción
-        Program-->>Inventario: Retorna selección
-        Inventario-->>Program: ProductoTerminado elegido
+    Cajero->>Vista: Ingresa código, escaneo de barras o nombre
+    Vista->>Servicio: BuscarProductoUniversal(criterio)
+    Servicio->>BD: SELECT con coincidencia exacta de SKU o parcial por nombre
+    BD-->>Servicio: Registro encontrado
+    Servicio-->>Vista: Instancia de ProductoTerminado
+
+    Vista->>Servicio: TieneReceta(sku)
+    Servicio->>BD: SELECT COUNT(*) FROM recetas WHERE producto_sku = @sku
+    BD-->>Servicio: Conteo de recetas
+
+    alt El artículo es una Receta / Preparado
+        Servicio-->>Vista: true
+        Vista->>Cajero: Solicita porciones / vasos a preparar
+        Cajero->>Vista: Ingresa cantidad (ej. 2)
+        Vista->>Servicio: VenderProductoElaborado(sku, porciones)
+        Servicio->>BD: BeginTransaction()
+        Servicio->>BD: Verificar existencias de materias primas
+        Servicio->>BD: UPDATE insumos (Deducción por porción)
+        Servicio->>BD: INSERT INTO movimientos (Auditoría de venta)
+        Servicio->>BD: CommitTransaction()
+    else El artículo es un Producto Directo
+        Servicio-->>Vista: false
+        Vista->>Cajero: Solicita piezas a vender
+        Cajero->>Vista: Ingresa cantidad (ej. 1)
+        Vista->>Servicio: RegistrarVenta(sku, cantidad)
+        Servicio->>BD: BeginTransaction()
+        Servicio->>BD: UPDATE productos (Deducción de stock directo)
+        Servicio->>BD: INSERT INTO movimientos (Auditoría de venta)
+        Servicio->>BD: CommitTransaction()
     end
 
-    Program->>Cajero: Solicita cantidad a despachar
-    Cajero->>Program: Ingresa unidades (ej. 2)
-    Program->>Inventario: RegistrarVenta(sku, cantidad)
-    Inventario->>BD: BeginTransaction()
-    Inventario->>BD: UPDATE productos SET stock = stock - cantidad
-    Inventario->>BD: INSERT INTO movimientos (Auditoría de venta)
-    Inventario->>BD: CommitTransaction()
-    BD-->>Inventario: Operación confirmada
-    Inventario-->>Program: true (Venta exitosa)
-    Program-->>Cajero: Muestra confirmación de venta y saldo restante
+    BD-->>Servicio: Confirmación de persistencia
+    Servicio-->>Vista: Operación exitosa
+    Vista-->>Cajero: Mensaje de confirmación en pantalla
 ```
 
 ---
 
-## 4. Ejecución del Proyecto
+## 4. Instrucciones de Ejecución
 
-1. Posicionarse en la carpeta del ejecutable:
+1. Abrir terminal en el directorio del proyecto:
    ```bash
    cd /workspaces/CafeteriaITCHII/CafeteriaInventario
    ```
-2. Ejecutar la aplicación:
+2. Ejecutar la solución:
    ```bash
    dotnet run
    ```
