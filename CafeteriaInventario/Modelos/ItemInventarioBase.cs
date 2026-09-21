@@ -1,26 +1,32 @@
-using System;
-
 namespace CafeteriaInventario.Modelos
 {
-    // Clase abstracta: no se puede instanciar directamente, solo heredar de ella
     public abstract class ItemInventarioBase
     {
         public long Id { get; set; }
-        public string Sku { get; set; }
-        public string Nombre { get; set; }
+        public string Sku { get; set; } = string.Empty;
+        public string Nombre { get; set; } = string.Empty;
         public decimal Precio { get; set; }
         public decimal Costo { get; set; }
+        public decimal Existencias { get; set; }
+        public decimal StockMinimo { get; set; } = 5;
 
-        protected ItemInventarioBase(long id, string sku, string nombre, decimal precio, decimal costo)
+        // Constructor por defecto
+        public ItemInventarioBase() { }
+
+        // Constructor con 5 argumentos (con Id como long)
+        public ItemInventarioBase(long id, string sku, string nombre, decimal precio, decimal costo)
         {
             Id = id;
             Sku = sku;
             Nombre = nombre;
             Precio = precio;
             Costo = costo;
+            Existencias = 0;
+            StockMinimo = 5;
         }
 
-        // Método abstracto que obliga a cada clase hija a implementar su forma de descontar existencias
+        public bool TieneBajoStock => Existencias <= StockMinimo;
+
         public abstract bool DescontarExistencias(decimal cantidad);
     }
 }

@@ -1,5 +1,4 @@
 ﻿using System;
-using CafeteriaInventario.Modelos;
 using CafeteriaInventario.Servicios;
 
 namespace CafeteriaInventario
@@ -11,13 +10,6 @@ namespace CafeteriaInventario
             InventarioServicio inventarioBD = new InventarioServicio();
             CajaServicio cajaBD = new CajaServicio();
 
-            Ingrediente cafeGrano = new Ingrediente("Grano de Cafe (g)", 1000);
-            Ingrediente leche = new Ingrediente("Leche (ml)", 2000);
-
-            ProductoElaborado cappuccino = new ProductoElaborado(99, "CAF-CAP", "Cappuccino Preparado", 50.00m, 16.00m);
-            cappuccino.AgregarInsumoAReceta(cafeGrano, 18);
-            cappuccino.AgregarInsumoAReceta(leche, 150);
-
             bool salir = false;
 
             do
@@ -28,8 +20,8 @@ namespace CafeteriaInventario
                 Console.WriteLine("1. Ver inventario general (SQLite)");
                 Console.WriteLine("2. Registrar venta de mostrador (SQLite)");
                 Console.WriteLine("3. Reabastecer stock (SQLite)");
-                Console.WriteLine("4. Vender Cappuccino elaborado (Receta)");
-                Console.WriteLine("5. Ver existencias de insumos de barra");
+                Console.WriteLine("4. Vender Cappuccino elaborado (Receta en SQLite)");
+                Console.WriteLine("5. Ver existencias de insumos de barra (SQLite)");
                 Console.WriteLine("6. Ver bitacora de movimientos (SQLite)");
                 Console.WriteLine("7. Realizar corte de caja y cierre de turno");
                 Console.WriteLine("8. Salir");
@@ -75,10 +67,7 @@ namespace CafeteriaInventario
                         Console.Write("¿Cuantas tazas de Cappuccino desea preparar?: ");
                         if (decimal.TryParse(Console.ReadLine(), out decimal tazas))
                         {
-                            if (cappuccino.DescontarExistencias(tazas))
-                            {
-                                Console.WriteLine($"Venta completada: {tazas} Cappuccino(s). Total: ${(cappuccino.Precio * tazas):F2}");
-                            }
+                            inventarioBD.VenderProductoElaborado("BEB-CAP", tazas);
                         }
                         else
                         {
@@ -87,9 +76,7 @@ namespace CafeteriaInventario
                         break;
 
                     case "5":
-                        Console.WriteLine("\n--- INSUMOS EN BARRA ---");
-                        Console.WriteLine($"- {cafeGrano.Nombre}: {cafeGrano.StockGramosOMl} g restantes");
-                        Console.WriteLine($"- {leche.Nombre}: {leche.StockGramosOMl} ml restantes");
+                        inventarioBD.ListarInsumosBarra();
                         break;
 
                     case "6":
@@ -110,7 +97,7 @@ namespace CafeteriaInventario
 
                         Console.Write("¿Desea cerrar el turno actual y reiniciar el contador a 0? (s/n): ");
                         string respuesta = Console.ReadLine() ?? "";
-                        if (respuesta?.Trim().ToLower() == "s")
+                        if (respuesta.Trim().ToLower() == "s")
                         {
                             cajaBD.CerrarTurnoCaja();
                             Console.WriteLine("-> Turno cerrado exitosamente. El contador de caja ahora esta en 0.");

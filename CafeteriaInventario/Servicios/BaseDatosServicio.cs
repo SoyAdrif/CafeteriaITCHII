@@ -12,29 +12,55 @@ namespace CafeteriaInventario.Servicios
             InicializarBaseDatos();
         }
 
+        public SqliteConnection ObtenerConexion()
+        {
+            var conexion = new SqliteConnection(CadenaConexion);
+            conexion.Open();
+            return conexion;
+        }
+
         private void InicializarBaseDatos()
         {
-            using (var conexion = new SqliteConnection(CadenaConexion))
+            using (var con = ObtenerConexion())
             {
-                conexion.Open();
-
-                string query = @"
+                // 1. Tabla de Productos con stock_minimo configurable
+                string crearTablaProductos = @"
                     CREATE TABLE IF NOT EXISTS productos (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         sku TEXT NOT NULL UNIQUE,
                         nombre TEXT NOT NULL,
                         precio_base DECIMAL NOT NULL,
-                        costo_precio DECIMAL NOT NULL
+                        costo_precio DECIMAL NOT NULL,
+                        stock_actual DECIMAL NOT NULL,
+                        stock_minimo DECIMAL NOT NULL DEFAULT 5
                     );
+                ";
 
-                    CREATE TABLE IF NOT EXISTS inventario (
+                // 2. Tabla de Insumos físicos de barra
+                string crearTablaInsumos = @"
+                    CREATE TABLE IF NOT EXISTS insumos (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        producto_id INTEGER NOT NULL UNIQUE,
-                        cantidad_disponible DECIMAL NOT NULL,
-                        stock_minimo DECIMAL DEFAULT 5.0,
-                        FOREIGN KEY (producto_id) REFERENCES productos(id)
+                        nombre TEXT NOT NULL,
+                        unidad_medida TEXT NOT NULL,
+                        stock_actual DECIMAL NOT NULL,
+                        stock_minimo DECIMAL NOT NULL DEFAULT 100
                     );
+                ";
 
+                // 3. Tabla intermedia de Recetas (Composición)
+                string crearTablaRecetas = @"
+                    CREATE TABLE IF NOT EXISTS recetas (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        producto_sku TEXT NOT NULL,
+                        insumo_id INTEGER NOT NULL,
+                        cantidad_requerida DECIMAL NOT NULL,
+                        FOREIGN KEY(producto_sku) REFERENCES productos(sku),
+                        FOREIGN KEY(insumo_id) REFERENCES insumos(id)
+                    );
+                ";
+
+                // 4. Tabla de Movimientos y Auditoría con control de turno
+                string crearTablaMovimientos = @"
                     CREATE TABLE IF NOT EXISTS movimientos (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         producto_sku TEXT NOT NULL,
@@ -43,50 +69,52 @@ namespace CafeteriaInventario.Servicios
                         motivo TEXT NOT NULL,
                         fecha TEXT NOT NULL,
                         estado TEXT NOT NULL DEFAULT 'Abierto'
-);
+                    );
                 ";
 
-                using (var comando = new SqliteCommand(query, conexion))
+                using (var cmd = new SqliteCommand(crearTablaProductos, con)) cmd.ExecuteNonQuery();
+                using (var cmd = new SqliteCommand(crearTablaInsumos, con)) cmd.ExecuteNonQuery();
+                using (var cmd = new SqliteCommand(crearTablaRecetas, con)) cmd.ExecuteNonQuery();
+                using (var cmd = new SqliteCommand(crearTablaMovimientos, con)) cmd.ExecuteNonQuery();
+
+                // Poblar productos base si está vacía
+                string checkProd = "SELECT COUNT(*) FROM productos;";
+                using (var checkCmd = new SqliteCommand(checkProd, con))
                 {
-                    comando.ExecuteNonQuery();
+                    long total = Convert.ToInt64(checkCmd.ExecuteScalar() ?? 0);
+                    if (total == 0)
+                    {
+                        string insertarProductos = @"
+                            INSERT INTO productos (sku, nombre, precio_base, costo_precio, stock_actual, stock_minimo) VALUES
+                            ('BEB-AME', 'Cafe Americano 12oz', 35.00, 8.50, 20, 5),
+                            ('REP-DON', 'Dona Glaseada', 22.00, 10.00, 15, 3),
+                            ('BEB-CAP', 'Cappuccino Preparado', 50.00, 16.00, 0, 0);
+                        ";
+                        using (var insCmd = new SqliteCommand(insertarProductos, con)) insCmd.ExecuteNonQuery();
+                    }
                 }
 
-                InsertarDatosIniciales(conexion);
-            }
-        }
-
-        private void InsertarDatosIniciales(SqliteConnection conexion)
-        {
-            string checkQuery = "SELECT COUNT(*) FROM productos;";
-            using (var checkCmd = new SqliteCommand(checkQuery, conexion))
-            {
-                long count = Convert.ToInt64(checkCmd.ExecuteScalar() ?? 0);
-                if (count == 0)
+                // Poblar insumos y receta base si está vacía
+                string checkInsumos = "SELECT COUNT(*) FROM insumos;";
+                using (var checkCmd = new SqliteCommand(checkInsumos, con))
                 {
-                    string insertQuery = @"
-                        INSERT INTO productos (sku, nombre, precio_base, costo_precio) VALUES 
-                        ('CAF-001', 'Cafe Americano', 35.00, 12.00),
-                        ('PAN-001', 'Croissant de Mantequilla', 45.00, 18.00),
-                        ('BEB-001', 'Te Verde', 30.00, 8.00);
-
-                        INSERT INTO inventario (producto_id, cantidad_disponible, stock_minimo) VALUES 
-                        (1, 20, 5),
-                        (2, 4, 5),
-                        (3, 10, 3);
-                    ";
-                    using (var insertCmd = new SqliteCommand(insertQuery, conexion))
+                    long total = Convert.ToInt64(checkCmd.ExecuteScalar() ?? 0);
+                    if (total == 0)
                     {
-                        insertCmd.ExecuteNonQuery();
+                        string insertarInsumos = @"
+                            INSERT INTO insumos (nombre, unidad_medida, stock_actual, stock_minimo) VALUES
+                            ('Grano de Cafe', 'g', 1000.0, 250.0),
+                            ('Leche Entera', 'ml', 2000.0, 500.0);
+
+                            -- Composición de receta: 1 Cappuccino requiere 18g cafe (id 1) y 150ml leche (id 2)
+                            INSERT INTO recetas (producto_sku, insumo_id, cantidad_requerida) VALUES
+                            ('BEB-CAP', 1, 18.0),
+                            ('BEB-CAP', 2, 150.0);
+                        ";
+                        using (var insCmd = new SqliteCommand(insertarInsumos, con)) insCmd.ExecuteNonQuery();
                     }
                 }
             }
-        }
-
-        public SqliteConnection ObtenerConexion()
-        {
-            var conexion = new SqliteConnection(CadenaConexion);
-            conexion.Open();
-            return conexion;
         }
     }
 }
