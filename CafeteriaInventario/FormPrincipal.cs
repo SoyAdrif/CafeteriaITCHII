@@ -15,15 +15,15 @@ namespace CafeteriaInventario
         private readonly List<ItemVentaTemporal> _carrito;
 
         // Controles de interfaz
-// Controles de interfaz inicializados en InicializarComponentes()
-    private TextBox txtEntrada = null!;
-    private NumericUpDown numCantidad = null!;
-    private Button btnAgregar = null!;
-    private DataGridView dgvTicket = null!;
-    private Label lblTotal = null!;
-    private Button btnCobrar = null!;
-    private Button btnLimpiar = null!;
-    private Button btnCorte = null!;
+        private TextBox txtEntrada = null!;
+        private NumericUpDown numCantidad = null!;
+        private Button btnAgregar = null!;
+        private DataGridView dgvTicket = null!;
+        private Label lblTotal = null!;
+        private Button btnCobrar = null!;
+        private Button btnQuitarItem = null!;
+        private Button btnLimpiar = null!;
+        private Button btnCorte = null!;
 
         public FormPrincipal()
         {
@@ -36,62 +36,138 @@ namespace CafeteriaInventario
 
         private void InicializarComponentes()
         {
-            // Propiedades de la ventana
+            // Propiedades de la ventana principal
             Text = "Punto de Venta - Cafetería ITCH II";
-            Size = new Size(880, 560);
+            Size = new Size(950, 600);
+            MinimumSize = new Size(880, 520);
             StartPosition = FormStartPosition.CenterScreen;
-            Font = new Font("Segoe UI", 11);
+            Font = new Font("Segoe UI", 10.5f);
+            BackColor = Color.FromArgb(245, 246, 250);
 
             // Panel superior de captura
-            Panel pnlSuperior = new Panel { Dock = DockStyle.Top, Height = 75, Padding = new Padding(10) };
+            Panel pnlSuperior = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 85,
+                Padding = new Padding(15, 10, 15, 10),
+                BackColor = Color.White
+            };
 
-            Label lblBuscar = new Label { Text = "Código / Producto:", AutoSize = true, Location = new Point(15, 12) };
-            txtEntrada = new TextBox { Location = new Point(15, 35), Width = 300 };
+            Label lblBuscar = new Label { Text = "Código de barras o Nombre:", AutoSize = true, Location = new Point(15, 12), Font = new Font("Segoe UI", 9.5f, FontStyle.Bold) };
+            txtEntrada = new TextBox { Location = new Point(15, 38), Width = 340, Font = new Font("Segoe UI", 12f) };
             txtEntrada.KeyDown += TxtEntrada_KeyDown;
 
-            Label lblCant = new Label { Text = "Cantidad:", AutoSize = true, Location = new Point(330, 12) };
-            numCantidad = new NumericUpDown { Location = new Point(330, 35), Width = 80, Minimum = 1, Maximum = 100, Value = 1 };
+            Label lblCant = new Label { Text = "Cantidad:", AutoSize = true, Location = new Point(375, 12), Font = new Font("Segoe UI", 9.5f, FontStyle.Bold) };
+            numCantidad = new NumericUpDown { Location = new Point(375, 38), Width = 90, Font = new Font("Segoe UI", 12f), Minimum = 1, Maximum = 100, Value = 1 };
 
-            btnAgregar = new Button { Text = "Agregar (+)", Location = new Point(425, 33), Width = 110, Height = 32 };
+            btnAgregar = new Button
+            {
+                Text = "Agregar (+)",
+                Location = new Point(480, 36),
+                Width = 120,
+                Height = 34,
+                BackColor = Color.FromArgb(220, 235, 252),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 10f, FontStyle.Bold)
+            };
+            btnAgregar.FlatAppearance.BorderColor = Color.FromArgb(180, 205, 235);
             btnAgregar.Click += (s, e) => AgregarProducto();
 
             pnlSuperior.Controls.AddRange(new Control[] { lblBuscar, txtEntrada, lblCant, numCantidad, btnAgregar });
 
             // Panel lateral de cobro y acciones
-            Panel pnlLateral = new Panel { Dock = DockStyle.Right, Width = 260, Padding = new Padding(15) };
+            Panel pnlLateral = new Panel
+            {
+                Dock = DockStyle.Right,
+                Width = 270,
+                Padding = new Padding(15),
+                BackColor = Color.White
+            };
 
-            Label lblTextoTotal = new Label { Text = "TOTAL A PAGAR:", AutoSize = true, Location = new Point(15, 20), ForeColor = Color.Gray };
-            lblTotal = new Label { Text = "$0.00", Font = new Font("Segoe UI", 24, FontStyle.Bold), ForeColor = Color.DarkGreen, Location = new Point(15, 45), AutoSize = true };
+            Label lblTextoTotal = new Label { Text = "TOTAL A PAGAR:", AutoSize = true, Location = new Point(15, 20), ForeColor = Color.FromArgb(100, 110, 120), Font = new Font("Segoe UI", 10f, FontStyle.Bold) };
+            lblTotal = new Label
+            {
+                Text = "$0.00",
+                Font = new Font("Segoe UI", 26f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(24, 134, 75),
+                Location = new Point(15, 45),
+                AutoSize = true
+            };
 
-            btnCobrar = new Button { Text = "COBRAR TICKET", Location = new Point(15, 120), Width = 225, Height = 55, BackColor = Color.LightGreen, Font = new Font("Segoe UI", 12, FontStyle.Bold) };
+            btnCobrar = new Button
+            {
+                Text = "COBRAR TICKET",
+                Location = new Point(15, 120),
+                Width = 235,
+                Height = 60,
+                BackColor = Color.FromArgb(46, 184, 92),
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 13f, FontStyle.Bold),
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand
+            };
+            btnCobrar.FlatAppearance.BorderSize = 0;
             btnCobrar.Click += (s, e) => CobrarTicket();
 
-            btnLimpiar = new Button { Text = "Cancelar Orden", Location = new Point(15, 190), Width = 225, Height = 35 };
+            btnQuitarItem = new Button
+            {
+                Text = "Quitar Artículo Seleccionado",
+                Location = new Point(15, 200),
+                Width = 235,
+                Height = 36,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9.5f)
+            };
+            btnQuitarItem.Click += (s, e) => QuitarArticuloSeleccionado();
+
+            btnLimpiar = new Button
+            {
+                Text = "Cancelar Orden Completa",
+                Location = new Point(15, 245),
+                Width = 235,
+                Height = 36,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9.5f)
+            };
             btnLimpiar.Click += (s, e) => LimpiarCarrito();
 
-            btnCorte = new Button { Text = "Corte de Turno", Location = new Point(15, 240), Width = 225, Height = 35 };
+            btnCorte = new Button
+            {
+                Text = "Corte de Turno",
+                Location = new Point(15, 300),
+                Width = 235,
+                Height = 40,
+                BackColor = Color.FromArgb(240, 243, 246),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 10f, FontStyle.Bold)
+            };
             btnCorte.Click += (s, e) => MostrarCorte();
 
-            pnlLateral.Controls.AddRange(new Control[] { lblTextoTotal, lblTotal, btnCobrar, btnLimpiar, btnCorte });
+            pnlLateral.Controls.AddRange(new Control[] { lblTextoTotal, lblTotal, btnCobrar, btnQuitarItem, btnLimpiar, btnCorte });
 
-            // Tabla central de artículos del ticket
+            // Tabla central DataGridView
             dgvTicket = new DataGridView
             {
                 Dock = DockStyle.Fill,
-                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                BackgroundColor = Color.White,
+                BorderStyle = BorderStyle.None,
                 AllowUserToAddRows = false,
                 ReadOnly = true,
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-                RowHeadersVisible = false
+                MultiSelect = false,
+                RowHeadersVisible = false,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                RowTemplate = { Height = 32 }
             };
 
-            dgvTicket.Columns.Add("Sku", "SKU");
-            dgvTicket.Columns.Add("Nombre", "Descripción");
-            dgvTicket.Columns.Add("Precio", "P. Unitario");
-            dgvTicket.Columns.Add("Cantidad", "Cant.");
-            dgvTicket.Columns.Add("Subtotal", "Subtotal");
+            // Definición de columnas con anchos proporcionales
+            dgvTicket.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "SKU", DataPropertyName = "Sku", FillWeight = 20 });
+            dgvTicket.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Descripción del Producto", DataPropertyName = "Nombre", FillWeight = 45 });
+            dgvTicket.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "P. Unitario", DataPropertyName = "Precio", FillWeight = 18 });
+            dgvTicket.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Cant.", DataPropertyName = "Cantidad", FillWeight = 12 });
+            dgvTicket.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Subtotal", DataPropertyName = "Subtotal", FillWeight = 18 });
 
-            // Agregar a la ventana
+            // Agregar contenedores a la ventana
             Controls.Add(dgvTicket);
             Controls.Add(pnlLateral);
             Controls.Add(pnlSuperior);
@@ -101,7 +177,7 @@ namespace CafeteriaInventario
         {
             if (e.KeyCode == Keys.Enter)
             {
-                e.SuppressKeyPress = true; // Evitar sonido beep
+                e.SuppressKeyPress = true;
                 AgregarProducto();
             }
         }
@@ -136,6 +212,22 @@ namespace CafeteriaInventario
             numCantidad.Value = 1;
             txtEntrada.Focus();
             ActualizarTabla();
+        }
+
+        private void QuitarArticuloSeleccionado()
+        {
+            if (dgvTicket.SelectedRows.Count == 0)
+            {
+                MessageBox.Show("Seleccione un artículo de la tabla para quitarlo.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            int index = dgvTicket.SelectedRows[0].Index;
+            if (index >= 0 && index < _carrito.Count)
+            {
+                _carrito.RemoveAt(index);
+                ActualizarTabla();
+            }
         }
 
         private void ActualizarTabla()
