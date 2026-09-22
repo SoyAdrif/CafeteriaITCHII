@@ -24,6 +24,7 @@ namespace CafeteriaInventario
         private Button btnQuitarItem = null!;
         private Button btnLimpiar = null!;
         private Button btnCorte = null!;
+        private Button btnVerCatalogo = null!;
 
         public FormPrincipal()
         {
@@ -142,6 +143,23 @@ namespace CafeteriaInventario
                 Font = new Font("Segoe UI", 10f, FontStyle.Bold)
             };
             btnCorte.Click += (s, e) => MostrarCorte();
+            btnVerCatalogo = new Button
+            {
+                Text = "Consultar Catálogo",
+                Location = new Point(15, 350),
+                Width = 235,
+                Height = 40,
+                BackColor = Color.FromArgb(235, 240, 245),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 10f)
+            };
+            btnVerCatalogo.Click += (s, e) =>
+            {
+                using var form = new FormCatalogo();
+                form.ShowDialog(this);
+            };
+            
+            pnlLateral.Controls.Add(btnVerCatalogo);
 
             pnlLateral.Controls.AddRange(new Control[] { lblTextoTotal, lblTotal, btnCobrar, btnQuitarItem, btnLimpiar, btnCorte });
 

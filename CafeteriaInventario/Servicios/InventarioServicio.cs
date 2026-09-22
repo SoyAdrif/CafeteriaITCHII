@@ -1099,7 +1099,42 @@ namespace CafeteriaInventario.Servicios
                     Console.WriteLine("-> Error al liquidar orden: " + ex.Message);
                     return false;
                 }
+                        }            }
+ 
+        public List<(string Sku, string Nombre, decimal Precio, string Stock)> ObtenerCatalogoCompleto()
+        {
+            var catalogo = new List<(string Sku, string Nombre, decimal Precio, string Stock)>();
+
+            using (var con = _bd.ObtenerConexion())
+            {
+                string query = @"
+                    SELECT p.sku, p.nombre, p.precio_base, p.stock_actual,
+                           COUNT(r.id) AS total_ingredientes
+                    FROM productos p
+                    LEFT JOIN recetas r ON p.sku = r.producto_sku
+                    GROUP BY p.sku
+                    ORDER BY p.nombre ASC;
+                ";
+
+                using (var cmd = new SqliteCommand(query, con))
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        string sku = reader.GetString(0);
+                        string nombre = reader.GetString(1);
+                        decimal precio = reader.GetDecimal(2);
+                        decimal stockActual = reader.IsDBNull(3) ? 0 : reader.GetDecimal(3);
+                        long totalIngredientes = reader.IsDBNull(4) ? 0 : reader.GetInt64(4);
+
+                        string stockDisplay = totalIngredientes > 0 ? "Preparado" : stockActual.ToString("0.##");
+
+                        catalogo.Add((sku, nombre, precio, stockDisplay));
+                    }
+                }
             }
-        }                     
-     }
+
+            return catalogo;
+        }
+    }
 }
