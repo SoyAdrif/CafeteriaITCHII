@@ -10,6 +10,10 @@ namespace CafeteriaInventario
         private readonly InventarioServicio _inventario;
         private DataGridView dgvCatalogo = null!;
         private TextBox txtFiltro = null!;
+        private Button btnSeleccionar = null!;
+
+        // Propiedad pública para transferir el SKU seleccionado al FormPrincipal
+        public string? SkuSeleccionado { get; private set; }
 
         public FormCatalogo()
         {
@@ -20,14 +24,14 @@ namespace CafeteriaInventario
 
         private void InicializarComponentes()
         {
-            Text = "Catálogo de Productos y Existencias";
+            Text = "Catálogo de Productos - Doble clic para agregar al ticket";
             Size = new Size(760, 500);
             MinimumSize = new Size(620, 400);
             StartPosition = FormStartPosition.CenterParent;
             Font = new Font("Segoe UI", 10f);
             BackColor = Color.FromArgb(245, 246, 250);
 
-            // Panel superior con buscador en vivo
+            // Panel superior
             Panel pnlTop = new Panel
             {
                 Dock = DockStyle.Top,
@@ -36,26 +40,25 @@ namespace CafeteriaInventario
                 BackColor = Color.White
             };
 
-            Label lblBuscar = new Label
-            {
-                Text = "Filtrar por SKU o Nombre:",
-                AutoSize = true,
-                Location = new Point(15, 10),
-                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold)
-            };
-
-            txtFiltro = new TextBox
-            {
-                Location = new Point(15, 30),
-                Width = 340,
-                Font = new Font("Segoe UI", 11f)
-            };
+            Label lblBuscar = new Label { Text = "Filtrar por SKU o Nombre:", AutoSize = true, Location = new Point(15, 10), Font = new Font("Segoe UI", 9.5f, FontStyle.Bold) };
+            txtFiltro = new TextBox { Location = new Point(15, 30), Width = 340, Font = new Font("Segoe UI", 11f) };
             txtFiltro.TextChanged += (s, e) => CargarProductos(txtFiltro.Text.Trim());
 
-            pnlTop.Controls.Add(lblBuscar);
-            pnlTop.Controls.Add(txtFiltro);
+            btnSeleccionar = new Button
+            {
+                Text = "Cargar al Ticket (Enter)",
+                Location = new Point(370, 28),
+                Width = 190,
+                Height = 32,
+                BackColor = Color.FromArgb(220, 240, 255),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold)
+            };
+            btnSeleccionar.Click += (s, e) => ConfirmarSeleccion();
 
-            // Tabla de productos
+            pnlTop.Controls.AddRange(new Control[] { lblBuscar, txtFiltro, btnSeleccionar });
+
+            // Tabla DataGridView
             dgvCatalogo = new DataGridView
             {
                 Dock = DockStyle.Fill,
@@ -74,8 +77,21 @@ namespace CafeteriaInventario
             dgvCatalogo.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Precio", FillWeight = 15 });
             dgvCatalogo.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Stock / Tipo", FillWeight = 20 });
 
+            // Evento: Al hacer doble clic sobre un renglón, se selecciona y se cierra
+            dgvCatalogo.CellDoubleClick += (s, e) => ConfirmarSeleccion();
+
             Controls.Add(dgvCatalogo);
             Controls.Add(pnlTop);
+        }
+
+        private void ConfirmarSeleccion()
+        {
+            if (dgvCatalogo.SelectedRows.Count > 0)
+            {
+                SkuSeleccionado = dgvCatalogo.SelectedRows[0].Cells[0].Value?.ToString();
+                DialogResult = DialogResult.OK;
+                Close();
+            }
         }
 
         private void CargarProductos(string filtro = "")

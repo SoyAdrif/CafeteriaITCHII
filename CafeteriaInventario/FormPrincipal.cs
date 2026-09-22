@@ -156,8 +156,12 @@ namespace CafeteriaInventario
             btnVerCatalogo.Click += (s, e) =>
             {
                 using var form = new FormCatalogo();
-                form.ShowDialog(this);
-            };
+                if (form.ShowDialog(this) == DialogResult.OK && !string.IsNullOrEmpty(form.SkuSeleccionado))
+            {
+                txtEntrada.Text = form.SkuSeleccionado;
+                AgregarProducto();
+    }
+};
             
             pnlLateral.Controls.Add(btnVerCatalogo);
 
