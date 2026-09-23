@@ -25,6 +25,7 @@ namespace CafeteriaInventario
         private Button btnLimpiar = null!;
         private Button btnCorte = null!;
         private Button btnVerCatalogo = null!;
+        private Button btnCerrarTurno = null!;
 
         public FormPrincipal()
         {
@@ -161,7 +162,23 @@ namespace CafeteriaInventario
                 txtEntrada.Text = form.SkuSeleccionado;
                 AgregarProducto();
     }
+};          
+            btnCerrarTurno = new Button
+{
+    Text = "Cerrar Turno Definitivo",
+    Location = new Point(15, 395),
+    Width = 235,
+    Height = 40,
+    BackColor = Color.FromArgb(254, 226, 226),
+    ForeColor = Color.FromArgb(185, 28, 28),
+    FlatStyle = FlatStyle.Flat,
+    Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+    Cursor = Cursors.Hand
 };
+btnCerrarTurno.FlatAppearance.BorderColor = Color.FromArgb(252, 165, 165);
+btnCerrarTurno.Click += (s, e) => EjecutarCierreTurno();
+
+pnlLateral.Controls.Add(btnCerrarTurno);   
             
             pnlLateral.Controls.Add(btnVerCatalogo);
 
@@ -304,5 +321,22 @@ namespace CafeteriaInventario
 
             MessageBox.Show(msg, "Resumen Financiero", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
+        private void EjecutarCierreTurno()
+{     
+    var confirmacion = MessageBox.Show(
+        "¿Está seguro de que desea realizar el CIERRE DE TURNO?\n\nEsta acción calculará los balances finales y cerrará el periodo de caja actual.",
+        "Confirmar Cierre de Turno",
+        MessageBoxButtons.YesNo,
+        MessageBoxIcon.Warning);
+
+    if (confirmacion == DialogResult.Yes)
+    {
+        if (_caja.CerrarTurnoCaja(out string reporte))
+        {
+            MessageBox.Show(reporte, "Cierre Contable Exitoso", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            LimpiarCarrito();
+        }
     }
+ } 
+ }    
 }
